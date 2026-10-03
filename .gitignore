@@ -1,0 +1,44 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Local databases and runtime state
+*.sqlite
+*.sqlite3
+*.db
+data/
+
+# Local/private learning material and uploads
+uploads/
+private/
+course_material/
+course-material/
+local_material/
+local-material/
+*.pdf
+
+# Evaluation data/artifacts from real course material
+eval/local/
+eval/private/
+eval/artifacts/
+*.eval.json
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
