@@ -11,10 +11,10 @@ T01 establishes the smallest runnable foundation for Recall:
 - health endpoint
 - pytest smoke tests
 
-The implementation intentionally does not include chunking, embeddings,
-semantic retrieval, answer generation, confidence states, citations,
-evaluation logic, authentication, messaging integrations, or
-recurring-confusion detection.
+The implementation intentionally does not include embeddings, semantic
+retrieval, answer generation, confidence states, citations, evaluation
+logic, authentication, messaging integrations, or recurring-confusion
+detection.
 
 ## Current Storage
 
@@ -38,3 +38,24 @@ Chunking belongs to T03.
 Duplicate ingestion is prevented by a SHA-256 hash of the PDF bytes.
 Filenames are stored only as sanitized display metadata and are never
 used as durable source identity or filesystem paths.
+
+## T03 Knowledge Units
+
+T03 adds page-scoped `knowledge_units` records. Each unit stores:
+
+- `material_id`
+- `extracted_page_id`
+- 1-based `page_number`
+- per-page `chunk_index`
+- normalized source text
+
+The database enforces that a KnowledgeUnit's material, extracted page,
+and page number match the same `extracted_pages` row. The chunking
+service processes one extracted page at a time, so chunks cannot cross
+PDF page boundaries.
+
+Chunking is deterministic and inspectable: whitespace is collapsed,
+paragraph/sentence boundaries are preferred, chunks target 700
+characters, and chunks have a 900-character hard maximum. Re-running
+generation for a material replaces that material's existing
+KnowledgeUnits inside one transaction.

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def connect(database_path: Path) -> sqlite3.Connection:
@@ -42,6 +42,15 @@ def initialize_database(database_path: Path) -> None:
                 VALUES (?)
                 """,
                 (2,),
+            )
+        if applied_version < 3:
+            apply_schema_v3(connection)
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO schema_versions (version)
+                VALUES (?)
+                """,
+                (3,),
             )
 
 
@@ -99,6 +108,43 @@ def apply_schema_v2(connection: sqlite3.Connection) -> None:
     )
 
 
+def apply_schema_v3(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_extracted_pages_provenance
+        ON extracted_pages (id, material_id, page_number)
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS knowledge_units (
+            id INTEGER PRIMARY KEY,
+            material_id INTEGER NOT NULL,
+            extracted_page_id INTEGER NOT NULL,
+            page_number INTEGER NOT NULL CHECK (page_number > 0),
+            chunk_index INTEGER NOT NULL CHECK (chunk_index >= 0),
+            text TEXT NOT NULL CHECK (length(trim(text)) > 0),
+            FOREIGN KEY (material_id)
+                REFERENCES materials (id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (extracted_page_id)
+                REFERENCES extracted_pages (id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (extracted_page_id, material_id, page_number)
+                REFERENCES extracted_pages (id, material_id, page_number)
+                ON DELETE CASCADE,
+            UNIQUE (material_id, extracted_page_id, chunk_index)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_knowledge_units_material_order
+        ON knowledge_units (material_id, page_number, chunk_index)
+        """
+    )
+
+
 def current_schema_version(database_path: Path) -> int | None:
     with connect(database_path) as connection:
         return current_schema_version_from_connection(connection)
@@ -114,6 +160,14 @@ def page_count(database_path: Path) -> int:
     with connect(database_path) as connection:
         row = connection.execute(
             "SELECT COUNT(*) AS count FROM extracted_pages"
+        ).fetchone()
+        return int(row["count"])
+
+
+def knowledge_unit_count(database_path: Path) -> int:
+    with connect(database_path) as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) AS count FROM knowledge_units"
         ).fetchone()
         return int(row["count"])
 
@@ -197,6 +251,84 @@ def list_material_pages(
                 (material_id,),
             ).fetchall()
         )
+
+
+def material_exists(connection: sqlite3.Connection, material_id: int) -> bool:
+    row = connection.execute(
+        "SELECT 1 FROM materials WHERE id = ?",
+        (material_id,),
+    ).fetchone()
+    return row is not None
+
+
+def list_material_pages_from_connection(
+    connection: sqlite3.Connection,
+    material_id: int,
+) -> list[sqlite3.Row]:
+    return list(
+        connection.execute(
+            """
+            SELECT id, material_id, page_number, text
+            FROM extracted_pages
+            WHERE material_id = ?
+            ORDER BY page_number ASC
+            """,
+            (material_id,),
+        ).fetchall()
+    )
+
+
+def replace_knowledge_units_for_material(
+    connection: sqlite3.Connection,
+    *,
+    material_id: int,
+    units: Iterable[tuple[int, int, int, str]],
+) -> None:
+    connection.execute(
+        "DELETE FROM knowledge_units WHERE material_id = ?",
+        (material_id,),
+    )
+    connection.executemany(
+        """
+        INSERT INTO knowledge_units (
+            material_id, extracted_page_id, page_number, chunk_index, text
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        [
+            (material_id, extracted_page_id, page_number, chunk_index, text)
+            for extracted_page_id, page_number, chunk_index, text in units
+        ],
+    )
+
+
+def list_knowledge_units_for_material(
+    database_path: Path,
+    material_id: int,
+) -> list[sqlite3.Row]:
+    with connect(database_path) as connection:
+        return list_knowledge_units_for_material_from_connection(
+            connection,
+            material_id,
+        )
+
+
+def list_knowledge_units_for_material_from_connection(
+    connection: sqlite3.Connection,
+    material_id: int,
+) -> list[sqlite3.Row]:
+    return list(
+        connection.execute(
+            """
+            SELECT id, material_id, extracted_page_id, page_number,
+                   chunk_index, text
+            FROM knowledge_units
+            WHERE material_id = ?
+            ORDER BY page_number ASC, chunk_index ASC
+            """,
+            (material_id,),
+        ).fetchall()
+    )
 
 
 def list_materials(database_path: Path) -> list[sqlite3.Row]:

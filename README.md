@@ -5,10 +5,11 @@ PDF ingestion, provenance-preserving knowledge representation, semantic
 retrieval, grounded answers, visible citations, and explicit refusal
 when evidence is insufficient.
 
-This repository currently includes the T01 application foundation and
-T02 PDF ingestion with page-level provenance. It does not implement
-chunking, embeddings, retrieval, answer generation, citations,
-evaluation logic, authentication, or recurring-confusion detection.
+This repository currently includes the T01 application foundation, T02
+PDF ingestion with page-level provenance, and T03 page-scoped
+KnowledgeUnit chunking. It does not implement embeddings, retrieval,
+answer generation, citations, evaluation logic, authentication, or
+recurring-confusion detection.
 
 ## Requirements
 
@@ -53,6 +54,19 @@ duplicate, even if the filename changes.
 Scanned/image-only PDFs, malformed PDFs, encrypted PDFs, empty files, and
 non-PDF inputs are rejected. Failed ingestion is atomic and should not
 leave partial material or page records behind.
+
+## Knowledge Units
+
+T03 converts each extracted page into deterministic `KnowledgeUnit`
+records. Chunking is page-scoped: a chunk never combines text from
+multiple PDF pages. Product-facing page numbers remain 1-based and are
+copied from `extracted_pages`, not derived from text.
+
+The chunker normalizes whitespace by collapsing runs of whitespace to a
+single space, then uses paragraph and sentence boundaries where possible.
+Chunks target 700 characters with a 900-character hard maximum. Running
+generation again for the same material replaces that material's existing
+KnowledgeUnits instead of duplicating them.
 
 ## Run
 

@@ -24,7 +24,7 @@ def test_health_endpoint_bootstraps_sqlite(tmp_path):
         "app": "Recall",
         "environment": "test",
         "database": "ok",
-        "schema_version": 2,
+        "schema_version": 3,
     }
 
 
@@ -34,7 +34,7 @@ def test_sqlite_schema_version_is_available_after_startup(tmp_path):
     with client:
         pass
 
-    assert current_schema_version(settings.database_path) == 2
+    assert current_schema_version(settings.database_path) == 3
 
 
 def test_home_page_renders(tmp_path):
