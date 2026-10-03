@@ -5,10 +5,10 @@ PDF ingestion, provenance-preserving knowledge representation, semantic
 retrieval, grounded answers, visible citations, and explicit refusal
 when evidence is insufficient.
 
-This repository is currently at T01: application foundation only. It
-does not implement PDF extraction, chunking, embeddings, retrieval,
-answer generation, citations, evaluation logic, authentication, or
-recurring-confusion detection.
+This repository currently includes the T01 application foundation and
+T02 PDF ingestion with page-level provenance. It does not implement
+chunking, embeddings, retrieval, answer generation, citations,
+evaluation logic, authentication, or recurring-confusion detection.
 
 ## Requirements
 
@@ -38,6 +38,21 @@ cp .env.example .env
 The default configuration stores local runtime data under `data/` and
 uploads under `uploads/`. These paths are ignored by Git and must not
 contain committed private course material.
+
+## PDF Ingestion
+
+T02 supports authorized, text-extractable PDFs through PyMuPDF. Ingestion
+creates one `Material` record and one `extracted_pages` record per source
+page. Product-facing page numbers are 1-based and come from the PDF page
+order, not from document text.
+
+Duplicate ingestion is detected by SHA-256 of the PDF bytes. Reingesting
+identical bytes returns the existing `Material` instead of creating a
+duplicate, even if the filename changes.
+
+Scanned/image-only PDFs, malformed PDFs, encrypted PDFs, empty files, and
+non-PDF inputs are rejected. Failed ingestion is atomic and should not
+leave partial material or page records behind.
 
 ## Run
 
