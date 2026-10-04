@@ -8,8 +8,10 @@ when evidence is insufficient.
 This repository currently includes the T01 application foundation, T02
 PDF ingestion with page-level provenance, and T03 page-scoped
 KnowledgeUnit chunking, and T04 semantic retrieval through persisted
-embeddings. It does not implement answer generation, citations,
-evaluation scoring, authentication, or recurring-confusion detection.
+embeddings. It also includes the T05A provider-independent grounded
+answer and trust layer. It does not include a real LLM provider,
+learner-facing answer UI, evaluation scoring, authentication, or
+recurring-confusion detection.
 
 ## Requirements
 
@@ -90,6 +92,31 @@ is joined from persisted KnowledgeUnit, ExtractedPage and Material data.
 FastEmbed may download/cache the model on first use. After the model is
 cached locally, Recall can index and retrieve with the FastEmbed provider
 without an API key or OpenAI request. Do not commit model cache files.
+
+## Grounded Answers
+
+T05A turns ranked retrieval evidence into a service-level response with:
+
+- `SUPPORTED`
+- `PARTIAL`
+- `NOT_FOUND`
+
+The generation provider is deliberately narrow: it receives only the
+learner question and selected KnowledgeUnit text, then returns answer
+text plus KnowledgeUnit IDs it claims to cite. Recall treats provider
+output as untrusted. Citation IDs are valid only when they were supplied
+as evidence and still resolve through the database to authoritative
+Material, page and chunk provenance.
+
+Citation validation proves grounding, not semantic completeness. Recall
+keeps retrieval selection, evidence sufficiency, and citation grounding
+as separate decisions so unused retrieval candidates do not automatically
+make an answer `PARTIAL`.
+
+The current implementation is fully offline-testable with deterministic
+fake providers and includes a simple extractive provider for development
+demonstrations. It does not install Ollama, call OpenAI, download a local
+LLM, or persist learner questions and answers.
 
 ## Run
 

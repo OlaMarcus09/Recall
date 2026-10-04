@@ -11,9 +11,11 @@ T01 establishes the smallest runnable foundation for Recall:
 - health endpoint
 - pytest smoke tests
 
-The implementation intentionally does not include answer generation,
-confidence states, citations, evaluation scoring, authentication,
-messaging integrations, or recurring-confusion detection.
+The T01 foundation did not include answer generation, confidence states,
+citations, evaluation scoring, authentication, messaging integrations,
+or recurring-confusion detection. Later slices add retrieval and the
+provider-independent grounded-answer trust layer while still avoiding
+final learner UI and recurring-confusion behavior.
 
 ## Current Storage
 
@@ -103,3 +105,60 @@ OpenAI and FastEmbed embeddings coexist by provider, model and vector
 dimension. Selecting a different provider/model requires indexing under
 that identity; retrieval never compares vectors from incompatible
 providers or models.
+
+## T05A Grounded Answer Trust Layer
+
+T05A adds a generation boundary without adding a real LLM runtime. The
+`GenerationProvider` contract accepts a learner question and selected
+evidence items containing only KnowledgeUnit IDs and text. It returns
+answer text and cited KnowledgeUnit IDs. It does not own support states,
+page numbers, titles, filenames, chunk indexes or citation display
+metadata.
+
+Recall keeps three separate concepts apart:
+
+- Retrieval selection chooses candidate evidence for generation.
+- Evidence sufficiency/coverage represents whether Recall has a known
+  reason to believe the available evidence only partially supports the
+  requested answer.
+- Citation grounding validates that the generated answer cites only
+  supplied evidence and that citations resolve to database provenance.
+
+Recall owns the trust policy:
+
+- If retrieved evidence is absent or too weak for a conservative first
+  pass, the service returns `NOT_FOUND` without calling generation.
+- If generation fails, is malformed, returns no citation, or cites a
+  KnowledgeUnit that was not supplied as evidence, the service returns
+  `NOT_FOUND`.
+- If generation succeeds, at least one citation validates against the
+  database, and no known partial-support signal exists, the response is
+  `SUPPORTED`.
+- If generation succeeds with valid citations but Recall has an explicit
+  known partial-support assessment, the response is `PARTIAL` and the
+  answer is prefixed to state that the material only partially supports
+  the response.
+
+This policy is deterministic and intentionally conservative. It uses a
+small low-evidence gate and a relative top-score band to select evidence,
+but it does not treat any single cosine score as proof that an answer is
+supported. It also does not infer answer completeness from the number or
+percentage of selected retrieval chunks cited. Calibration and richer
+semantic coverage checks belong to later evaluation work.
+
+Citation validation is database-derived. A citation is valid only when
+the cited KnowledgeUnit ID was supplied to the provider and still resolves
+through persisted `knowledge_units` and `materials` rows. Any page,
+document or chunk metadata attempted by a provider is ignored. Citation
+validity proves grounding, not semantic completeness.
+
+Prompt construction treats retrieved text as untrusted data. Evidence is
+placed in explicit KnowledgeUnit blocks and the instructions tell the
+provider to answer only from supplied evidence, cite only supplied IDs,
+avoid outside knowledge, and ignore instructions embedded inside course
+material.
+
+T05A includes deterministic fake-provider testing and a simple extractive
+development provider. It does not persist questions/answers, install
+Ollama, call OpenAI generation APIs, add a local LLM, tune retrieval, or
+introduce T06 recurring-confusion behavior.
