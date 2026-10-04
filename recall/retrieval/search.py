@@ -4,7 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from recall import db
-from recall.retrieval.embeddings import EmbeddingProvider, source_text_hash
+from recall.retrieval.embeddings import (
+    EmbeddingProvider,
+    embed_query,
+    source_text_hash,
+)
 from recall.retrieval.index import decode_vector
 from recall.retrieval.math import cosine_similarity
 
@@ -43,7 +47,7 @@ def retrieve_relevant_knowledge_units(
         raise RetrievalError("Question text cannot be empty.")
     validate_top_k(top_k)
 
-    query_embedding = provider.embed(query)
+    query_embedding = embed_query(provider, query)
     if query_embedding.provider != provider.provider or query_embedding.model != provider.model:
         raise RetrievalError("Query embedding provider identity mismatch.")
 

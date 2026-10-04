@@ -7,9 +7,10 @@ name = "recall"
 version = "0.1.0"
 description = "A learning-memory system with trustworthy, cited retrieval."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "fastapi>=0.115,<1.0",
+    "fastembed>=0.8,<0.9",
     "jinja2>=3.1,<4.0",
     "openai>=1.0,<2.0",
     "PyMuPDF>=1.24,<2.0",

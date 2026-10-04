@@ -8,6 +8,7 @@ from recall import db
 from recall.retrieval.embeddings import (
     EmbeddedText,
     EmbeddingProvider,
+    embed_document,
     source_text_hash,
 )
 from recall.retrieval.math import cosine_similarity
@@ -44,7 +45,7 @@ def index_material_embeddings(
     vector_dimension: int | None = None
 
     for unit in units:
-        embedded = provider.embed(unit["text"])
+        embedded = embed_document(provider, unit["text"])
         validate_provider_identity(embedded, provider)
         validate_embedding_vector(embedded.vector)
         if cosine_similarity(embedded.vector, embedded.vector) is None:

@@ -77,3 +77,29 @@ Cosine similarity is computed in Python over SQLite-loaded vectors. The
 ranking layer returns evidence only: score, KnowledgeUnit text, Material
 metadata, extracted page id, page number and chunk index. It does not
 generate answers or classify confidence states.
+
+## T04.1 Local Embeddings
+
+Recall supports two embedding providers behind the same narrow
+`EmbeddingProvider` boundary:
+
+- `fastembed` with `BAAI/bge-small-en-v1.5` for local no-key retrieval
+- `openai` with `text-embedding-3-small` when a valid API key is present
+
+FastEmbed is the default development provider. It may download/cache the
+model on first use, then can run locally without an OpenAI request. Model
+caches are local artifacts and must remain outside Git.
+
+The local FastEmbed path should run on Python 3.11 or 3.12. In the
+current development environment, FastEmbed's ONNXRuntime dependency did
+not resolve reliably under Python 3.13.
+
+For BGE/FastEmbed, KnowledgeUnit text is embedded as passages and learner
+questions are embedded as queries. This keeps BGE's query/document
+retrieval convention inside the provider layer and leaves persisted
+KnowledgeUnit source text unchanged.
+
+OpenAI and FastEmbed embeddings coexist by provider, model and vector
+dimension. Selecting a different provider/model requires indexing under
+that identity; retrieval never compares vectors from incompatible
+providers or models.

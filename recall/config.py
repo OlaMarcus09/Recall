@@ -12,12 +12,14 @@ class Settings:
     environment: str = "development"
     database_path: Path = Path("data/recall.sqlite3")
     upload_dir: Path = Path("uploads")
-    embedding_provider: str = "openai"
-    embedding_model: str = "text-embedding-3-small"
+    embedding_provider: str = "fastembed"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    fastembed_cache_dir: Path | None = None
     openai_api_key: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
+        fastembed_cache_dir = os.getenv("RECALL_FASTEMBED_CACHE_DIR")
         return cls(
             environment=os.getenv("RECALL_ENV", cls.environment),
             database_path=Path(os.getenv("RECALL_DATABASE_PATH", str(cls.database_path))),
@@ -27,6 +29,9 @@ class Settings:
                 cls.embedding_provider,
             ),
             embedding_model=os.getenv("RECALL_EMBEDDING_MODEL", cls.embedding_model),
+            fastembed_cache_dir=(
+                Path(fastembed_cache_dir) if fastembed_cache_dir else None
+            ),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
         )
 

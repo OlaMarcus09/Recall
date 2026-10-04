@@ -6,13 +6,20 @@ from dataclasses import dataclass
 import pytest
 
 from recall import db
+from recall.config import Settings
 from recall.db import (
     embedding_count,
     initialize_database,
     list_knowledge_units_for_material,
 )
 from recall.knowledge.service import generate_knowledge_units_for_material
-from recall.retrieval.embeddings import EmbeddedText
+from recall.retrieval.embeddings import (
+    EmbeddedText,
+    EmbeddingProviderError,
+    FastEmbedEmbeddingProvider,
+    OpenAIEmbeddingProvider,
+    build_embedding_provider,
+)
 from recall.retrieval.index import (
     IndexingError,
     index_material_embeddings,
@@ -46,6 +53,25 @@ class FakeEmbeddingProvider:
         return EmbeddedText(vector=vector, provider=self.provider, model=self.model)
 
 
+class FakeFastEmbedModel:
+    instances = []
+
+    def __init__(self, *, model_name, cache_dir=None):
+        self.model_name = model_name
+        self.cache_dir = cache_dir
+        self.calls = []
+        self.instances.append(self)
+
+    def passage_embed(self, texts):
+        self.calls.append(("passage", list(texts)))
+        for text in self.calls[-1][1]:
+            yield [float(len(text)), 1.0, 0.5]
+
+    def query_embed(self, query):
+        self.calls.append(("query", query))
+        yield [float(len(query)), 2.0, 0.5]
+
+
 def material_with_units(database_path):
     material = create_material_with_pages(
         database_path,
@@ -58,6 +84,126 @@ def material_with_units(database_path):
     )
     generate_knowledge_units_for_material(database_path, material["id"])
     return material
+
+
+def test_fastembed_provider_construction_and_identity(tmp_path):
+    FakeFastEmbedModel.instances = []
+
+    provider = FastEmbedEmbeddingProvider(
+        model="BAAI/bge-small-en-v1.5",
+        cache_dir=tmp_path / "model-cache",
+        embedding_class=FakeFastEmbedModel,
+    )
+
+    assert provider.provider == "fastembed"
+    assert provider.model == "BAAI/bge-small-en-v1.5"
+    assert FakeFastEmbedModel.instances[0].cache_dir == str(tmp_path / "model-cache")
+
+
+def test_fastembed_provider_converts_document_and_query_vectors():
+    FakeFastEmbedModel.instances = []
+    provider = FastEmbedEmbeddingProvider(
+        model="BAAI/bge-small-en-v1.5",
+        embedding_class=FakeFastEmbedModel,
+    )
+
+    document_embedding = provider.embed_document("course policy material")
+    query_embedding = provider.embed_query("what is policy?")
+
+    assert document_embedding == EmbeddedText(
+        vector=[22.0, 1.0, 0.5],
+        provider="fastembed",
+        model="BAAI/bge-small-en-v1.5",
+    )
+    assert query_embedding == EmbeddedText(
+        vector=[15.0, 2.0, 0.5],
+        provider="fastembed",
+        model="BAAI/bge-small-en-v1.5",
+    )
+    assert FakeFastEmbedModel.instances[0].calls == [
+        ("passage", ["course policy material"]),
+        ("query", "what is policy?"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "bad_vector",
+    [
+        [],
+        ["not-a-number"],
+        [float("nan")],
+        object(),
+    ],
+)
+def test_fastembed_malformed_output_fails_safely(bad_vector):
+    class BadFastEmbedModel(FakeFastEmbedModel):
+        def passage_embed(self, texts):
+            yield bad_vector
+
+    provider = FastEmbedEmbeddingProvider(
+        model="BAAI/bge-small-en-v1.5",
+        embedding_class=BadFastEmbedModel,
+    )
+
+    with pytest.raises(EmbeddingProviderError, match="invalid vector"):
+        provider.embed_document("text")
+
+
+def test_fastembed_loading_failure_is_sanitized():
+    class FailingFastEmbedModel:
+        def __init__(self, **kwargs):
+            raise RuntimeError("local path with noisy internals")
+
+    with pytest.raises(EmbeddingProviderError, match="FastEmbed model could not be loaded"):
+        FastEmbedEmbeddingProvider(
+            model="BAAI/bge-small-en-v1.5",
+            embedding_class=FailingFastEmbedModel,
+        )
+
+
+def test_build_embedding_provider_selects_fastembed_without_openai_key(monkeypatch):
+    class FakeTextEmbedding(FakeFastEmbedModel):
+        pass
+
+    monkeypatch.setattr(
+        "recall.retrieval.embeddings.FastEmbedEmbeddingProvider",
+        lambda *, model, cache_dir: FastEmbedEmbeddingProvider(
+            model=model,
+            cache_dir=cache_dir,
+            embedding_class=FakeTextEmbedding,
+        ),
+    )
+    settings = Settings(
+        embedding_provider="fastembed",
+        embedding_model="BAAI/bge-small-en-v1.5",
+        openai_api_key=None,
+    )
+
+    provider = build_embedding_provider(settings)
+
+    assert provider.provider == "fastembed"
+    assert provider.model == "BAAI/bge-small-en-v1.5"
+
+
+def test_build_embedding_provider_keeps_openai_supported():
+    settings = Settings(
+        embedding_provider="openai",
+        embedding_model="text-embedding-3-small",
+        openai_api_key="safe-test-placeholder",
+    )
+
+    provider = build_embedding_provider(settings)
+
+    assert isinstance(provider, OpenAIEmbeddingProvider)
+    assert provider.provider == "openai"
+    assert provider.model == "text-embedding-3-small"
+
+
+def test_build_embedding_provider_rejects_unknown_provider():
+    settings = Settings(embedding_provider="unknown")
+
+    with pytest.raises(EmbeddingProviderError, match="Unsupported embedding provider"):
+        build_embedding_provider(settings)
 
 
 def test_indexes_embeddings_with_provider_identity_and_dimension(tmp_path):
@@ -84,6 +230,32 @@ def test_indexes_embeddings_with_provider_identity_and_dimension(tmp_path):
     assert [row["provider"] for row in rows] == ["fake", "fake", "fake"]
     assert [row["model"] for row in rows] == ["fake-model"] * 3
     assert [row["vector_dimension"] for row in rows] == [3, 3, 3]
+
+
+def test_indexing_through_fastembed_provider_records_local_identity(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material = material_with_units(database_path)
+    provider = FastEmbedEmbeddingProvider(
+        model="BAAI/bge-small-en-v1.5",
+        embedding_class=FakeFastEmbedModel,
+    )
+
+    result = index_material_embeddings(database_path, material["id"], provider)
+
+    assert result.provider == "fastembed"
+    assert result.model == "BAAI/bge-small-en-v1.5"
+    assert result.vector_dimension == 3
+    with db.connect(database_path) as connection:
+        row = connection.execute(
+            """
+            SELECT provider, model, vector_dimension
+            FROM knowledge_unit_embeddings
+            LIMIT 1
+            """
+        ).fetchone()
+    assert row["provider"] == "fastembed"
+    assert row["model"] == "BAAI/bge-small-en-v1.5"
+    assert row["vector_dimension"] == 3
 
 
 def test_indexing_is_idempotent_for_same_provider_model(tmp_path):
@@ -123,6 +295,48 @@ def test_model_change_keeps_embeddings_separate(tmp_path):
         material_id=material["id"],
     )
     assert old_results[0].knowledge_unit_id == new_results[0].knowledge_unit_id
+
+
+def test_local_and_openai_provider_indexes_do_not_mix(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material = material_with_units(database_path)
+    local_provider = FakeEmbeddingProvider(
+        provider="fastembed",
+        model="BAAI/bge-small-en-v1.5",
+    )
+    openai_provider = FakeEmbeddingProvider(
+        provider="openai",
+        model="text-embedding-3-small",
+    )
+
+    index_material_embeddings(database_path, material["id"], local_provider)
+    index_material_embeddings(database_path, material["id"], openai_provider)
+
+    assert embedding_count(database_path) == 6
+    with db.connect(database_path) as connection:
+        connection.execute(
+            """
+            UPDATE knowledge_unit_embeddings
+            SET vector_json = '[1000.0,0.0,0.0]'
+            WHERE provider = 'openai'
+            """
+        )
+
+    local_results = retrieve_relevant_knowledge_units(
+        database_path,
+        question="banana",
+        provider=local_provider,
+        material_id=material["id"],
+    )
+    openai_results = retrieve_relevant_knowledge_units(
+        database_path,
+        question="apple",
+        provider=openai_provider,
+        material_id=material["id"],
+    )
+
+    assert "Banana" in local_results[0].text
+    assert "Apple" in openai_results[0].text
 
 
 def test_stale_embeddings_after_knowledge_unit_change_do_not_participate(tmp_path):
