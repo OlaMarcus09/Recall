@@ -7,9 +7,9 @@ when evidence is insufficient.
 
 This repository currently includes the T01 application foundation, T02
 PDF ingestion with page-level provenance, and T03 page-scoped
-KnowledgeUnit chunking. It does not implement embeddings, retrieval,
-answer generation, citations, evaluation logic, authentication, or
-recurring-confusion detection.
+KnowledgeUnit chunking, and T04 semantic retrieval through persisted
+embeddings. It does not implement answer generation, citations,
+evaluation scoring, authentication, or recurring-confusion detection.
 
 ## Requirements
 
@@ -68,6 +68,19 @@ Chunks target 700 characters with a 900-character hard maximum. Running
 generation again for the same material replaces that material's existing
 KnowledgeUnits instead of duplicating them.
 
+## Semantic Retrieval
+
+T04 stores embeddings as derived data linked to `KnowledgeUnit` records.
+The default provider/model configuration is OpenAI
+`text-embedding-3-small`, but tests use an offline deterministic fake
+provider.
+
+Indexing a material embeds all current KnowledgeUnits before replacing
+that material's stored embeddings in one transaction. Retrieval computes
+the question embedding, filters to a compatible provider/model/vector
+dimension, and ranks valid rows with cosine similarity. Result provenance
+is joined from persisted KnowledgeUnit, ExtractedPage and Material data.
+
 ## Run
 
 ```bash
@@ -92,5 +105,8 @@ Recall reads configuration from environment variables:
 - `RECALL_ENV`: runtime environment label, default `development`
 - `RECALL_DATABASE_PATH`: SQLite database path, default `data/recall.sqlite3`
 - `RECALL_UPLOAD_DIR`: future upload storage path, default `uploads`
+- `RECALL_EMBEDDING_PROVIDER`: embedding provider name, default `openai`
+- `RECALL_EMBEDDING_MODEL`: embedding model, default `text-embedding-3-small`
+- `OPENAI_API_KEY`: required only for the live OpenAI embedding provider
 
-No secrets are required for T01.
+Do not commit real API keys or private course material.

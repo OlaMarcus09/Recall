@@ -149,4 +149,4 @@ def test_schema_version_is_upgraded_for_ingestion_tables(tmp_path):
 
     initialize_database(database_path)
 
-    assert current_schema_version(database_path) == 3
+    assert current_schema_version(database_path) == 4
