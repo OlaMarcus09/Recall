@@ -482,3 +482,179 @@ def test_extractive_provider_mechanically_cites_supplied_evidence(tmp_path):
     assert response.status == SupportStatus.SUPPORTED
     assert response.answer.startswith("The available material says:")
     assert response.citations[0].knowledge_unit_id == units[0].id
+
+
+def test_extractive_provider_uses_multiple_supplied_evidence_items(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material, units = material_with_units(
+        database_path,
+        [
+            "Mission describes why an organisation exists.",
+            "Vision describes the organisation's desired future direction.",
+            "Objectives turn broad direction into measurable targets.",
+        ],
+    )
+
+    response = generate_grounded_response(
+        database_path=database_path,
+        question="How are mission and vision different?",
+        retrieved=[
+            retrieval_result(units[0], material, rank=1, score=0.83),
+            retrieval_result(units[1], material, rank=2, score=0.82),
+            retrieval_result(units[2], material, rank=3, score=0.81),
+        ],
+        provider=ExtractiveGenerationProvider(),
+    )
+
+    assert response.status == SupportStatus.SUPPORTED
+    assert "Mission describes why" in response.answer
+    assert "Vision describes" in response.answer
+    assert [citation.knowledge_unit_id for citation in response.citations] == [
+        units[0].id,
+        units[1].id,
+        units[2].id,
+    ]
+
+
+def test_extractive_provider_preserves_later_sentence_within_bounded_unit():
+    text = (
+        "Introductory context explains how resources are allocated for the work. "
+        "The later sentence contains the important answer that should not be "
+        "discarded merely because it appears later in the same bounded unit."
+    )
+
+    answer = ExtractiveGenerationProvider().generate(
+        question="What is important?",
+        evidence=[EvidenceItem(knowledge_unit_id=1, text=text)],
+    )
+
+    assert "The later sentence contains the important answer" in answer.answer_text
+    assert answer.cited_knowledge_unit_ids == [1]
+
+
+def test_extractive_provider_does_not_cite_unused_evidence(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material, units = material_with_units(
+        database_path,
+        [
+            "First useful evidence.",
+            "Second useful evidence.",
+            "Third useful evidence.",
+            "Fourth evidence should remain unused because the fallback is bounded.",
+        ],
+    )
+
+    response = generate_grounded_response(
+        database_path=database_path,
+        question="What does the evidence say?",
+        retrieved=[
+            retrieval_result(units[0], material, rank=1, score=0.90),
+            retrieval_result(units[1], material, rank=2, score=0.89),
+            retrieval_result(units[2], material, rank=3, score=0.88),
+            retrieval_result(units[3], material, rank=4, score=0.875),
+        ],
+        provider=ExtractiveGenerationProvider(),
+    )
+
+    assert "Fourth evidence" not in response.answer
+    assert [citation.knowledge_unit_id for citation in response.citations] == [
+        units[0].id,
+        units[1].id,
+        units[2].id,
+    ]
+
+
+def test_extractive_provider_skips_near_duplicate_evidence(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material, units = material_with_units(
+        database_path,
+        [
+            "Strategy aligns resources with long-term goals.",
+            "Strategy aligns resources with long-term goals.",
+            "Implementation puts plans into action.",
+        ],
+    )
+
+    response = generate_grounded_response(
+        database_path=database_path,
+        question="What does the material say?",
+        retrieved=[
+            retrieval_result(units[0], material, rank=1, score=0.86),
+            retrieval_result(units[1], material, rank=2, score=0.855),
+            retrieval_result(units[2], material, rank=3, score=0.85),
+        ],
+        provider=ExtractiveGenerationProvider(),
+    )
+
+    assert response.answer.count("Strategy aligns resources") == 1
+    assert [citation.knowledge_unit_id for citation in response.citations] == [
+        units[0].id,
+        units[2].id,
+    ]
+
+
+def test_extractive_provider_output_remains_bounded():
+    provider = ExtractiveGenerationProvider()
+    long_text = " ".join(f"sentence-{index}" for index in range(30))
+
+    answer = provider.generate(
+        question="What does the evidence say?",
+        evidence=[
+            EvidenceItem(knowledge_unit_id=1, text=long_text),
+            EvidenceItem(knowledge_unit_id=2, text=long_text.replace("sentence", "detail")),
+            EvidenceItem(knowledge_unit_id=3, text=long_text.replace("sentence", "point")),
+        ],
+    )
+
+    assert len(answer.answer_text) <= len("The available material says: ") + provider.max_answer_chars
+    assert answer.cited_knowledge_unit_ids == [1, 2, 3]
+
+
+def test_extractive_provider_does_not_cite_evidence_excluded_by_budget():
+    provider = ExtractiveGenerationProvider()
+    first = " ".join(f"first-{index}" for index in range(500))
+
+    answer = provider.generate(
+        question="What does the evidence say?",
+        evidence=[
+            EvidenceItem(knowledge_unit_id=1, text=first),
+            EvidenceItem(knowledge_unit_id=2, text="Second evidence should not fit."),
+        ],
+    )
+
+    assert len(answer.answer_text) <= len("The available material says: ") + provider.max_answer_chars
+    assert answer.cited_knowledge_unit_ids == [1]
+    assert "Second evidence" not in answer.answer_text
+
+
+def test_extractive_provider_truncation_is_deterministic_and_safe():
+    provider = ExtractiveGenerationProvider()
+    text = " ".join(f"detail-{index}" for index in range(500))
+
+    first = provider.generate(
+        question="What does the evidence say?",
+        evidence=[EvidenceItem(knowledge_unit_id=1, text=text)],
+    )
+    second = provider.generate(
+        question="What does the evidence say?",
+        evidence=[EvidenceItem(knowledge_unit_id=1, text=text)],
+    )
+
+    assert first == second
+    assert first.answer_text.endswith("...")
+    assert len(first.answer_text) <= len("The available material says: ") + provider.max_answer_chars
+
+
+def test_extractive_provider_does_not_introduce_outside_knowledge():
+    answer = ExtractiveGenerationProvider().generate(
+        question="What is the dosage of amoxicillin?",
+        evidence=[
+            EvidenceItem(
+                knowledge_unit_id=1,
+                text="Mission describes why an organisation exists.",
+            )
+        ],
+    )
+
+    assert "amoxicillin" not in answer.answer_text.lower()
+    assert "Mission describes" in answer.answer_text
