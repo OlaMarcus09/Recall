@@ -14,7 +14,7 @@ from recall.answering import (
     normalize_question,
 )
 from recall.config import Settings
-from recall.confusion.service import list_recurring_confusions
+from recall.confusion.service import ConfusionCluster, list_recurring_confusions
 from recall.db import current_schema_version
 from recall.generation.service import REFUSAL_MESSAGE, SupportStatus
 from recall.retrieval.embeddings import build_embedding_provider
@@ -32,14 +32,7 @@ def create_router(settings: Settings) -> APIRouter:
         return templates.TemplateResponse(
             request=request,
             name="index.html",
-            context={
-                "request": request,
-                "app_name": settings.app_name,
-                "environment": settings.environment,
-                "question": "",
-                "result": None,
-                "error": None,
-            },
+            context=page_context(settings, request=request),
         )
 
     @router.post("/ask", response_class=HTMLResponse)
@@ -74,14 +67,13 @@ def create_router(settings: Settings) -> APIRouter:
         return templates.TemplateResponse(
             request=request,
             name="index.html",
-            context={
-                "request": request,
-                "app_name": settings.app_name,
-                "environment": settings.environment,
-                "question": question,
-                "result": result,
-                "error": error,
-            },
+            context=page_context(
+                settings,
+                request=request,
+                question=question,
+                result=result,
+                error=error,
+            ),
             status_code=status_code,
         )
 
@@ -160,6 +152,32 @@ def create_router(settings: Settings) -> APIRouter:
         }
 
     return router
+
+
+def page_context(
+    settings: Settings,
+    *,
+    request: Request,
+    question: str = "",
+    result: LearnerAnswer | None = None,
+    error: str | None = None,
+) -> dict[str, object]:
+    return {
+        "request": request,
+        "app_name": settings.app_name,
+        "environment": settings.environment,
+        "question": question,
+        "result": result,
+        "error": error,
+        "confusion_clusters": safe_recurring_confusions(settings),
+    }
+
+
+def safe_recurring_confusions(settings: Settings) -> list[ConfusionCluster]:
+    try:
+        return list_recurring_confusions(settings.database_path)
+    except Exception:
+        return []
 
 
 async def question_from_form(request: Request) -> str:
