@@ -134,6 +134,30 @@ or provenance resolution. It calls the application service and renders the
 returned citation contract. Citation page numbers are physical 1-based PDF
 pages persisted during ingestion, not generated or inferred labels.
 
+## Evaluation Harness
+
+T07 adds a developer-facing trust evaluation harness:
+
+```bash
+python -m recall.evaluation path/to/fixture.json
+```
+
+The fixture contains stable case IDs, learner questions and expected
+support states. Optional expected concepts and reference notes are
+metadata for human review only; they are not passed into retrieval,
+generation or prompts.
+
+The harness reports machine-checkable trust metrics such as status
+matches, false supported answers, false refusals, citation presence,
+NOT_FOUND citation absence, provenance validity and page-number
+availability. Semantic answer quality remains a human-review field
+(`CORRECT`, `INCORRECT`, or `UNREVIEWED`); Recall does not use keyword
+matching or an LLM judge to pretend semantic grading is automatic.
+
+Use synthetic fixtures in the repository. Real course PDFs, extracted
+text, evaluation databases, embeddings and private benchmark reports
+must remain local and ignored.
+
 ## Run
 
 ```bash

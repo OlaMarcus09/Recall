@@ -1,0 +1,26 @@
+{
+  "name": "synthetic trust fixture",
+  "cases": [
+    {
+      "case_id": "SYN-01",
+      "question": "What does the synthetic material say strategy provides?",
+      "expected_status": "SUPPORTED",
+      "expected_concepts": [
+        "strategy provides direction"
+      ],
+      "reference_notes": "Synthetic fixture metadata for human review only."
+    },
+    {
+      "case_id": "SYN-02",
+      "question": "What dosage of a medicine should a child receive?",
+      "expected_status": "NOT_FOUND",
+      "human_review": "CORRECT"
+    },
+    {
+      "case_id": "SYN-03",
+      "question": "What is only partially described?",
+      "expected_status": "PARTIAL",
+      "human_review": "UNREVIEWED"
+    }
+  ]
+}

@@ -190,3 +190,32 @@ uses the same `NOT_FOUND` refusal rather than fabricating an answer or
 showing raw implementation errors. Learner questions and retrieved PDF
 text are treated as untrusted content and rendered with normal Jinja
 escaping.
+
+## Evaluation Harness
+
+The evaluation harness is developer infrastructure, not learner-facing
+product behavior. It executes declared evaluation cases through the
+existing application boundary (`answer_question`) and observes the
+resulting status, answer and citations. It does not duplicate retrieval,
+generation, evidence selection or citation validation.
+
+Evaluation fixtures keep runtime inputs separate from review metadata:
+
+- `question` is the only text sent through Recall;
+- expected support status is used only for comparison;
+- expected concepts, reference notes and human-review labels stay in the
+  evaluation report.
+
+Machine-checkable metrics cover trust properties: expected-status
+matches, false-supported unsupported cases, false refusals, citation
+presence for answer-bearing states, citation absence for `NOT_FOUND`,
+provenance validity and page-number availability. Semantic correctness is
+not inferred automatically. Human review may label a case `CORRECT`,
+`INCORRECT` or `UNREVIEWED` after inspecting the answer and evidence.
+
+The CLI (`python -m recall.evaluation <fixture.json>`) uses configured
+Recall settings and fails clearly if the database, provider or index is
+unavailable. It does not ingest PDFs, rebuild indexes, call OpenAI by
+default, or persist learner questions. Committed fixtures must be
+synthetic; real course benchmarks and reports remain local ignored
+artifacts.
