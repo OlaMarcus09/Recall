@@ -18,34 +18,128 @@
       }
 
       main {
-        width: min(760px, calc(100% - 32px));
-        margin: 64px auto;
-      }
-
-      .status {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 10px;
-        border: 1px solid #c9d8c7;
-        border-radius: 6px;
-        background: #eef7ed;
-        color: #254529;
-        font-size: 14px;
-        font-weight: 600;
+        width: min(880px, calc(100% - 32px));
+        margin: 40px auto 64px;
       }
 
       h1 {
-        margin: 20px 0 12px;
-        font-size: clamp(2rem, 8vw, 4rem);
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 7vw, 3.75rem);
         line-height: 1;
         letter-spacing: 0;
       }
 
       p {
-        max-width: 60ch;
         margin: 0 0 16px;
+      }
+
+      .intro {
+        max-width: 62ch;
         font-size: 18px;
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+        margin: 28px 0 24px;
+      }
+
+      label {
+        font-weight: 700;
+      }
+
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+        padding: 12px;
+        border: 1px solid #b8bbb3;
+        border-radius: 6px;
+        background: #fff;
+        color: inherit;
+        font: inherit;
+      }
+
+      button {
+        justify-self: start;
+        padding: 10px 14px;
+        border: 0;
+        border-radius: 6px;
+        background: #1f5e4d;
+        color: #fff;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .error,
+      .answer,
+      .citation {
+        border: 1px solid #d8d7d0;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .error {
+        padding: 12px;
+        border-color: #d9a5a5;
+        background: #fff4f4;
+      }
+
+      .answer {
+        padding: 18px;
+      }
+
+      .status {
+        display: inline-flex;
+        margin-bottom: 12px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #ecebe7;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .status.SUPPORTED {
+        background: #e3f3e7;
+        color: #235331;
+      }
+
+      .status.PARTIAL {
+        background: #fff0c7;
+        color: #6a4c00;
+      }
+
+      .status.NOT_FOUND {
+        background: #eeeef1;
+        color: #464853;
+      }
+
+      .citations {
+        display: grid;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .citation {
+        padding: 14px;
+      }
+
+      .citation-title {
+        margin-bottom: 6px;
+        font-weight: 800;
+      }
+
+      .citation-meta {
+        margin-bottom: 8px;
+        color: #555850;
+        font-size: 14px;
+      }
+
+      blockquote {
+        margin: 0;
+        padding-left: 12px;
+        border-left: 3px solid #c8d3ce;
+        color: #333630;
       }
 
       code {
@@ -57,12 +151,49 @@
   </head>
   <body>
     <main>
-      <div class="status">Foundation ready</div>
       <h1>{{ app_name }}</h1>
-      <p>
-        Recall is ready for the first vertical slice foundation. PDF ingestion,
-        retrieval, grounded answers, and citations will be added in later tasks.
+      <p class="intro">
+        Ask a question about the indexed course material. Recall answers only
+        from retrieved evidence and shows the physical PDF page behind each
+        citation.
       </p>
+
+      <form method="post" action="/ask">
+        <label for="question">Question</label>
+        <textarea id="question" name="question" maxlength="500" required>{{ question }}</textarea>
+        <button type="submit">Ask Recall</button>
+      </form>
+
+      {% if error %}
+        <div class="error">{{ error }}</div>
+      {% endif %}
+
+      {% if result %}
+        <section class="answer" aria-live="polite">
+          <div class="status {{ result.status.value }}">{{ result.status.value }}</div>
+          <p>{{ result.answer }}</p>
+
+          {% if result.status.value == "PARTIAL" %}
+            <p>The available material only partially supports this response.</p>
+          {% endif %}
+
+          {% if result.citations %}
+            <div class="citations">
+              {% for citation in result.citations %}
+                <article class="citation">
+                  <div class="citation-title">{{ citation.document_title }}</div>
+                  <div class="citation-meta">
+                    Page {{ citation.page_number }} · Chunk {{ citation.chunk_index }} ·
+                    KU {{ citation.knowledge_unit_id }}
+                  </div>
+                  <blockquote>{{ citation.evidence_excerpt }}</blockquote>
+                </article>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </section>
+      {% endif %}
+
       <p>Environment: <code>{{ environment }}</code></p>
     </main>
   </body>

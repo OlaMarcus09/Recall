@@ -118,6 +118,22 @@ fake providers and includes a simple extractive provider for development
 demonstrations. It does not install Ollama, call OpenAI, download a local
 LLM, or persist learner questions and answers.
 
+## Learner UI
+
+The root page provides the minimal learner question flow. It runs the
+same retrieval and grounded-answer service used by tests, then renders:
+
+- the answer or stable `NOT_FOUND` refusal;
+- support status;
+- citations with database-derived document title, physical PDF page and
+  chunk index;
+- a short bounded excerpt from each cited KnowledgeUnit.
+
+The web layer does not implement retrieval, generation, confidence logic
+or provenance resolution. It calls the application service and renders the
+returned citation contract. Citation page numbers are physical 1-based PDF
+pages persisted during ingestion, not generated or inferred labels.
+
 ## Run
 
 ```bash

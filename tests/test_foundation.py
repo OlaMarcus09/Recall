@@ -44,4 +44,4 @@ def test_home_page_renders(tmp_path):
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Recall" in response.text
-    assert "Foundation ready" in response.text
+    assert "Ask Recall" in response.text

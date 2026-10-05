@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
+from recall.answering import (
+    LearnerAnswer,
+    QuestionValidationError,
+    answer_question,
+    normalize_question,
+)
 from recall.config import Settings
 from recall.db import current_schema_version
+from recall.generation.service import REFUSAL_MESSAGE, SupportStatus
+from recall.retrieval.embeddings import build_embedding_provider
 
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -26,7 +35,97 @@ def create_router(settings: Settings) -> APIRouter:
                 "request": request,
                 "app_name": settings.app_name,
                 "environment": settings.environment,
+                "question": "",
+                "result": None,
+                "error": None,
             },
+        )
+
+    @router.post("/ask", response_class=HTMLResponse)
+    async def ask(request: Request) -> HTMLResponse:
+        question = await question_from_form(request)
+        result = None
+        error = None
+        status_code = status.HTTP_200_OK
+
+        try:
+            normalized_question = normalize_question(question)
+            result = answer_question(
+                database_path=settings.database_path,
+                question=normalized_question,
+                embedding_provider=build_embedding_provider(settings),
+            )
+            question = result.question
+        except QuestionValidationError as exc:
+            error = str(exc)
+            question = question.strip()
+            status_code = status.HTTP_400_BAD_REQUEST
+        except Exception:
+            question = question.strip()
+            result = LearnerAnswer(
+                question=question,
+                status=SupportStatus.NOT_FOUND,
+                answer=REFUSAL_MESSAGE,
+                citations=[],
+            )
+
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={
+                "request": request,
+                "app_name": settings.app_name,
+                "environment": settings.environment,
+                "question": question,
+                "result": result,
+                "error": error,
+            },
+            status_code=status_code,
+        )
+
+    @router.post("/api/ask")
+    async def ask_json(request: Request) -> JSONResponse:
+        payload = await request.json()
+        question = str(payload.get("question", ""))
+        try:
+            normalized_question = normalize_question(question)
+            result = answer_question(
+                database_path=settings.database_path,
+                question=normalized_question,
+                embedding_provider=build_embedding_provider(settings),
+            )
+        except QuestionValidationError as exc:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": str(exc)},
+            )
+        except Exception:
+            normalized_question = question.strip()
+            result = LearnerAnswer(
+                question=normalized_question,
+                status=SupportStatus.NOT_FOUND,
+                answer=REFUSAL_MESSAGE,
+                citations=[],
+            )
+
+        return JSONResponse(
+            content={
+                "question": result.question,
+                "status": result.status.value,
+                "answer": result.answer,
+                "citations": [
+                    {
+                        "knowledge_unit_id": citation.knowledge_unit_id,
+                        "material_id": citation.material_id,
+                        "document_title": citation.document_title,
+                        "original_filename": citation.original_filename,
+                        "page_number": citation.page_number,
+                        "chunk_index": citation.chunk_index,
+                        "evidence_excerpt": citation.evidence_excerpt,
+                    }
+                    for citation in result.citations
+                ],
+            }
         )
 
     @router.get("/health")
@@ -40,3 +139,9 @@ def create_router(settings: Settings) -> APIRouter:
         }
 
     return router
+
+
+async def question_from_form(request: Request) -> str:
+    body = (await request.body()).decode("utf-8")
+    values = parse_qs(body, keep_blank_values=True)
+    return values.get("question", [""])[0]
