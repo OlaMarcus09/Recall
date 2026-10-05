@@ -15,6 +15,7 @@ build/
 dist/
 *.egg-info/
 .venv/
+.venv*/
 venv/
 
 # Local databases and runtime state

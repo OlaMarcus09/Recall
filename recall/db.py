@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def connect(database_path: Path) -> sqlite3.Connection:
@@ -60,6 +60,15 @@ def initialize_database(database_path: Path) -> None:
                 VALUES (?)
                 """,
                 (4,),
+            )
+        if applied_version < 5:
+            apply_schema_v5(connection)
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO schema_versions (version)
+                VALUES (?)
+                """,
+                (5,),
             )
 
 
@@ -172,6 +181,71 @@ def apply_schema_v4(connection: sqlite3.Connection) -> None:
                 ON DELETE CASCADE,
             UNIQUE (knowledge_unit_id, provider, model)
         )
+        """
+    )
+
+
+def apply_schema_v5(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS confusion_clusters (
+            id INTEGER PRIMARY KEY,
+            representative_question_id INTEGER,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            vector_dimension INTEGER NOT NULL CHECK (vector_dimension > 0),
+            centroid_vector_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (representative_question_id)
+                REFERENCES learner_questions (id)
+                ON DELETE SET NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS learner_questions (
+            id INTEGER PRIMARY KEY,
+            normalized_text TEXT NOT NULL CHECK (length(trim(normalized_text)) > 0),
+            support_status TEXT NOT NULL CHECK (
+                support_status IN ('SUPPORTED', 'PARTIAL', 'NOT_FOUND')
+            ),
+            confusion_cluster_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (confusion_cluster_id)
+                REFERENCES confusion_clusters (id)
+                ON DELETE SET NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS question_embeddings (
+            id INTEGER PRIMARY KEY,
+            learner_question_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            vector_json TEXT NOT NULL,
+            vector_dimension INTEGER NOT NULL CHECK (vector_dimension > 0),
+            source_text_sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (learner_question_id)
+                REFERENCES learner_questions (id)
+                ON DELETE CASCADE,
+            UNIQUE (learner_question_id, provider, model)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_question_embeddings_model
+        ON question_embeddings (provider, model, vector_dimension)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_learner_questions_cluster
+        ON learner_questions (confusion_cluster_id, created_at, id)
         """
     )
     connection.execute(

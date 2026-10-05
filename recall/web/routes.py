@@ -14,6 +14,7 @@ from recall.answering import (
     normalize_question,
 )
 from recall.config import Settings
+from recall.confusion.service import list_recurring_confusions
 from recall.db import current_schema_version
 from recall.generation.service import REFUSAL_MESSAGE, SupportStatus
 from recall.retrieval.embeddings import build_embedding_provider
@@ -54,6 +55,7 @@ def create_router(settings: Settings) -> APIRouter:
                 database_path=settings.database_path,
                 question=normalized_question,
                 embedding_provider=build_embedding_provider(settings),
+                remember_question=True,
             )
             question = result.question
         except QuestionValidationError as exc:
@@ -93,6 +95,7 @@ def create_router(settings: Settings) -> APIRouter:
                 database_path=settings.database_path,
                 question=normalized_question,
                 embedding_provider=build_embedding_provider(settings),
+                remember_question=True,
             )
         except QuestionValidationError as exc:
             return JSONResponse(
@@ -125,6 +128,24 @@ def create_router(settings: Settings) -> APIRouter:
                     }
                     for citation in result.citations
                 ],
+            }
+        )
+
+    @router.get("/api/confusions")
+    async def confusions() -> JSONResponse:
+        clusters = list_recurring_confusions(settings.database_path)
+        return JSONResponse(
+            content={
+                "clusters": [
+                    {
+                        "cluster_id": cluster.cluster_id,
+                        "representative_question": cluster.representative_question,
+                        "recurrence_count": cluster.recurrence_count,
+                        "first_seen": cluster.first_seen,
+                        "last_seen": cluster.last_seen,
+                    }
+                    for cluster in clusters
+                ]
             }
         )
 

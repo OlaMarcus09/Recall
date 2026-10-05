@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from recall import db
+from recall.confusion.service import record_question_memory
 from recall.generation.providers import ExtractiveGenerationProvider, GenerationProvider
 from recall.generation.service import (
     REFUSAL_MESSAGE,
@@ -49,6 +50,7 @@ def answer_question(
     embedding_provider: EmbeddingProvider,
     generation_provider: GenerationProvider | None = None,
     top_k: int = DEFAULT_TOP_K,
+    remember_question: bool = False,
 ) -> LearnerAnswer:
     normalized_question = normalize_question(question)
     provider = generation_provider or ExtractiveGenerationProvider()
@@ -74,7 +76,7 @@ def answer_question(
             provider=provider,
         )
 
-    return LearnerAnswer(
+    learner_answer = LearnerAnswer(
         question=normalized_question,
         status=grounded.status,
         answer=grounded.answer,
@@ -94,6 +96,17 @@ def answer_question(
             for citation in grounded.citations
         ],
     )
+    if remember_question:
+        try:
+            record_question_memory(
+                database_path=database_path,
+                question=normalized_question,
+                support_status=grounded.status,
+                embedding_provider=embedding_provider,
+            )
+        except Exception:
+            pass
+    return learner_answer
 
 
 def normalize_question(question: str) -> str:

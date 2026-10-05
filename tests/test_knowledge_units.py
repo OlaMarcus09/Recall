@@ -278,4 +278,4 @@ def test_schema_version_is_upgraded_for_knowledge_units(tmp_path):
 
     initialize_database(database_path)
 
-    assert current_schema_version(database_path) == 4
+    assert current_schema_version(database_path) == 5

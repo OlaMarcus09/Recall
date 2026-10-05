@@ -9,9 +9,10 @@ This repository currently includes the T01 application foundation, T02
 PDF ingestion with page-level provenance, and T03 page-scoped
 KnowledgeUnit chunking, and T04 semantic retrieval through persisted
 embeddings. It also includes the T05A provider-independent grounded
-answer and trust layer. It does not include a real LLM provider,
-learner-facing answer UI, evaluation scoring, authentication, or
-recurring-confusion detection.
+answer and trust layer, the minimal learner-facing UI, a trust
+evaluation harness, and anonymous recurring-confusion grouping. It does
+not include a real LLM provider, authentication, user profiles, or a
+polished analytics dashboard.
 
 ## Requirements
 
@@ -157,6 +158,37 @@ matching or an LLM judge to pretend semantic grading is automatic.
 Use synthetic fixtures in the repository. Real course PDFs, extracted
 text, evaluation databases, embeddings and private benchmark reports
 must remain local and ignored.
+
+## Collective Confusion
+
+T08 adds anonymous question memory. After Recall answers a validated
+learner question, it can store the normalized question text, the actual
+support status returned by Recall, a separate question embedding, and a
+confusion-cluster assignment. This memory is observational: it does not
+change retrieval, generation, support states or citations.
+
+Question embeddings are stored separately from course KnowledgeUnit
+embeddings. They include provider, model, vector dimension and source
+hash metadata so incompatible question representations are not compared.
+
+Grouping uses a deterministic MVP heuristic: compare the new question
+embedding with existing cluster centroids for the same provider/model
+and dimension, then join the closest cluster only when cosine similarity
+is at least `0.82`. This threshold is intentionally conservative and
+should be calibrated with more real evaluation data. The first question
+in a cluster is the representative question; it is a label for human
+inspection, not an LLM-generated concept name.
+
+Recurring confusions are clusters with at least two persisted questions.
+Recurrence counts are derived from question membership, so repeated
+legitimate submissions count as community signal. The JSON endpoint
+`GET /api/confusions` returns cluster summaries only; it does not expose
+embeddings or learner identity.
+
+Question text may contain personal information typed by a learner, so it
+should be treated as sensitive local data. Recall does not store user
+accounts, names, emails, phone numbers, IP addresses, device IDs or
+per-learner profiles for this slice.
 
 ## Run
 

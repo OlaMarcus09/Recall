@@ -219,3 +219,45 @@ unavailable. It does not ingest PDFs, rebuild indexes, call OpenAI by
 default, or persist learner questions. Committed fixtures must be
 synthetic; real course benchmarks and reports remain local ignored
 artifacts.
+
+## Collective Confusion
+
+Question memory is anonymous and observational. The learner answer path
+still runs through the existing grounded-answer pipeline first. After a
+validated question receives an actual Recall support status, the memory
+layer attempts to persist and group the question. If memory persistence
+or grouping fails, the learner answer is still returned unchanged.
+
+T08 adds three schema areas:
+
+- `learner_questions`: normalized question text, actual support status,
+  cluster assignment and timestamp;
+- `question_embeddings`: provider/model/dimension-scoped embeddings for
+  learner questions, separate from `knowledge_unit_embeddings`;
+- `confusion_clusters`: representative question, provider/model,
+  dimension and centroid vector for grouping.
+
+No identity fields are stored. The system does not record learner names,
+emails, phone numbers, device identifiers, IP addresses or user profiles.
+Question text itself may still contain personal information, so local DBs
+and evaluation artifacts must be treated as sensitive.
+
+The grouping algorithm embeds the normalized learner question with the
+configured embedding provider's query path, compares it by cosine
+similarity against cluster centroids with the same provider, model and
+dimension, and joins the closest eligible cluster only when similarity is
+at least `0.82`. Otherwise it creates a new cluster. The threshold is a
+conservative MVP heuristic intended to prefer false splits over false
+merges; it is separate from answer-support gates and requires later
+calibration.
+
+Cluster centroids are recomputed from member question embeddings whenever
+a new question joins. Recurrence count is derived from persisted
+membership, not a manually maintained counter. The first question in a
+cluster is the representative question and acts as the human-readable
+label. It is not an LLM-generated topic name.
+
+The minimal developer/product surface is `GET /api/confusions`, which
+returns recurring clusters with cluster ID, representative question,
+recurrence count, first seen and last seen. It does not expose embeddings
+or individual learner identity.
