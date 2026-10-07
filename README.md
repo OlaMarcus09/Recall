@@ -47,6 +47,64 @@ The default configuration stores local runtime data under `data/` and
 uploads under `uploads/`. These paths are ignored by Git and must not
 contain committed private course material.
 
+## Quick Demo From a Fresh Clone
+
+Recall includes a small synthetic PDF so reviewers can prepare a working
+local demo without private course material. The document is fictional
+and exists only to demonstrate ingestion, citations, refusal and
+recurring question grouping.
+
+From a fresh clone:
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+cp .env.example .env
+```
+
+Prepare a demo database from the included synthetic PDF:
+
+```bash
+export RECALL_DATABASE_PATH=data/recall-demo.sqlite3
+export RECALL_EMBEDDING_PROVIDER=fastembed
+export RECALL_EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+python -m recall.demo prepare demo/recall-demo-material.pdf
+```
+
+The first FastEmbed run may download and cache
+`BAAI/bge-small-en-v1.5`, so initial preparation can take longer and may
+require internet access. After the model is cached, Recall uses the
+local provider without an OpenAI API key.
+
+Start the web app:
+
+```bash
+python -m uvicorn recall.main:app --reload
+```
+
+Then open `http://127.0.0.1:8000/` and try:
+
+- Supported: `What is Northstar Bakery's mission?`
+- Supported: `What are Northstar Bakery's strategic priorities?`
+- Unsupported: `Which medication should an employee take for a bacterial infection?`
+- Confusion pair:
+  - `What is Northstar Bakery's mission?`
+  - `How would you describe the mission of Northstar Bakery?`
+
+The supported questions should return grounded answers with source
+citations and physical PDF pages. The unsupported question should return
+Recall's refusal instead of a fabricated answer. Similar repeated
+questions can appear in Community Confusion as anonymous recurrence,
+reported as "Asked N times" rather than unique learner counts.
+
+To prepare your own authorized text-extractable PDF, use the same
+command shape:
+
+```bash
+python -m recall.demo prepare /path/to/authorized-course-material.pdf
+```
+
 ## PDF Ingestion
 
 T02 supports authorized, text-extractable PDFs through PyMuPDF. Ingestion

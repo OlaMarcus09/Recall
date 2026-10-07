@@ -32,6 +32,7 @@ course-material/
 local_material/
 local-material/
 *.pdf
+!demo/recall-demo-material.pdf
 
 # Evaluation data/artifacts from real course material
 eval/local/
