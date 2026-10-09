@@ -175,7 +175,13 @@ make an answer `PARTIAL`.
 The current implementation is fully offline-testable with deterministic
 fake providers and includes a simple extractive provider for development
 demonstrations. It does not install Ollama, call OpenAI, download a local
-LLM, or persist learner questions and answers.
+LLM, or persist generated answer records. When the learner web/API flow
+uses question memory, Recall stores normalized question text, the actual
+support status returned by Recall, question embedding metadata and a
+confusion-cluster assignment for recurring-question grouping. It does
+not store generated answers, citation excerpts or user identity fields
+for that memory layer; question text itself may still contain personal
+information and should be treated as sensitive local data.
 
 ## Learner UI
 
