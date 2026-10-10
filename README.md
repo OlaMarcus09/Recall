@@ -1,18 +1,37 @@
 # Recall
 
-Recall is a learning-memory system. The first vertical slice will prove
-PDF ingestion, provenance-preserving knowledge representation, semantic
-retrieval, grounded answers, visible citations, and explicit refusal
-when evidence is insufficient.
+Recall is a learning-memory system for study communities. It turns
+authorized, text-extractable learning material into grounded answers
+with visible source citations, explicit refusal when evidence is
+insufficient, and anonymous recurring-question grouping for Community
+Confusion.
 
-This repository currently includes the T01 application foundation, T02
-PDF ingestion with page-level provenance, and T03 page-scoped
-KnowledgeUnit chunking, and T04 semantic retrieval through persisted
-embeddings. It also includes the T05A provider-independent grounded
-answer and trust layer, the minimal learner-facing UI, a trust
-evaluation harness, and anonymous recurring-confusion grouping. It does
-not include a real LLM provider, authentication, user profiles, or a
-polished analytics dashboard.
+The completed MVP demonstrates:
+
+- provenance-safe PDF ingestion;
+- page-scoped KnowledgeUnits;
+- local FastEmbed semantic retrieval;
+- grounded extractive answers with `SUPPORTED`, `PARTIAL` and
+  `NOT_FOUND` states;
+- database-derived document/page citations;
+- a mobile-first learner UI;
+- a trust evaluation harness;
+- anonymous question memory and recurring-confusion grouping;
+- a reproducible synthetic demo that does not require private course
+  material.
+
+Recall does not include a real LLM provider, authentication, user
+profiles, production deployment, OCR for scanned PDFs, WhatsApp
+integration, or generated conceptual cluster labels.
+
+Project and submission documents:
+
+- [Product brief](PRODUCT_BRIEF.md)
+- [Capstone specification](CAPSTONE_SPEC.md)
+- [Agent/project rules](AGENTS.md)
+- [Architecture notes](docs/architecture.md)
+- [Demo script](DEMO_SCRIPT.md)
+- [Submission reflection](SUBMISSION_REFLECTION.md)
 
 ## Requirements
 
@@ -85,18 +104,18 @@ python -m uvicorn recall.main:app --reload
 
 Then open `http://127.0.0.1:8000/` and try:
 
-- Supported: `What is Northstar Bakery's mission?`
 - Supported: `What are Northstar Bakery's strategic priorities?`
 - Unsupported: `Which medication should an employee take for a bacterial infection?`
 - Confusion pair:
   - `What is Northstar Bakery's mission?`
   - `How would you describe the mission of Northstar Bakery?`
 
-The supported questions should return grounded answers with source
+The supported question should return a grounded answer with source
 citations and physical PDF pages. The unsupported question should return
-Recall's refusal instead of a fabricated answer. Similar repeated
-questions can appear in Community Confusion as anonymous recurrence,
-reported as "Asked N times" rather than unique learner counts.
+Recall's refusal instead of a fabricated answer. In a fresh demo
+database, the two mission questions can appear in Community Confusion as
+anonymous recurrence, reported as "Asked 2 times" rather than unique
+learner counts.
 
 To prepare your own authorized text-extractable PDF, use the same
 command shape:
@@ -253,6 +272,40 @@ Question text may contain personal information typed by a learner, so it
 should be treated as sensitive local data. Recall does not store user
 accounts, names, emails, phone numbers, IP addresses, device IDs or
 per-learner profiles for this slice.
+
+## Built with Codex
+
+Recall was built with Codex as an engineering partner throughout the
+capstone. The original problem, product direction, first community
+context, refusal-first trust principle, feature scope, visual acceptance
+and final feature freeze were human decisions. Codex helped turn those
+decisions into scoped implementation tasks, code, tests, reviews and
+release checks.
+
+The repository history reflects the build sequence:
+
+- T01 established the FastAPI, SQLite and pytest foundation.
+- T02-T03 added provenance-safe PDF ingestion and page-scoped
+  KnowledgeUnits.
+- T04-T04.1 added semantic retrieval and the local FastEmbed provider.
+- T05A-T05D added the grounded-answer trust layer, citation validation
+  and extractive answer improvements.
+- T06-T09 added the learner UI, evaluation harness, anonymous Community
+  Confusion and mobile-first presentation.
+- T10 added the reproducible synthetic demo bootstrap.
+
+Codex accelerated planning, implementation, regression-test design,
+privacy and provenance audits, demo reproducibility, and repeated
+pre-publication reviews. It was especially useful for preserving the
+trust boundaries: generated text never supplies citation metadata,
+page numbers come from ingestion, expected evaluation concepts are not
+passed into retrieval or generation, and private course material remains
+outside the public repository.
+
+Human review remained central. The real-material semantic evaluation,
+known limitations, visual direction, accepted tradeoffs and decision not
+to add WhatsApp or a local LLM before submission were made by the human
+developer.
 
 ## Run
 
