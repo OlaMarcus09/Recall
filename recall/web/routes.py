@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import ipaddress
+import tempfile
+from dataclasses import dataclass
+from email.parser import BytesParser
+from email.policy import default
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -15,13 +20,43 @@ from recall.answering import (
 )
 from recall.config import Settings
 from recall.confusion.service import ConfusionCluster, list_recurring_confusions
+from recall import db
 from recall.db import current_schema_version
 from recall.generation.service import REFUSAL_MESSAGE, SupportStatus
+from recall.ingestion.pdf import PdfExtractionError
+from recall.ingestion.service import IngestionResult, ingest_pdf
+from recall.knowledge.service import (
+    KnowledgeUnit,
+    KnowledgeUnitGenerationError,
+    generate_knowledge_units_for_material,
+)
 from recall.retrieval.embeddings import build_embedding_provider
+from recall.retrieval.index import IndexingError, IndexingResult, index_material_embeddings
 
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_MULTIPART_BODY_BYTES = MAX_UPLOAD_BYTES + 64 * 1024
+
+
+class UploadError(ValueError):
+    """Raised when a local PDF upload cannot be accepted."""
+
+
+class UploadTooLargeError(UploadError):
+    """Raised when an uploaded PDF exceeds the configured size limit."""
+
+
+@dataclass(frozen=True)
+class MaterialUploadResult:
+    ingestion: IngestionResult
+    knowledge_units: list[KnowledgeUnit]
+    index: IndexingResult
+
+    @property
+    def created(self) -> bool:
+        return self.ingestion.created
 
 
 def create_router(settings: Settings) -> APIRouter:
@@ -73,6 +108,51 @@ def create_router(settings: Settings) -> APIRouter:
                 question=question,
                 result=result,
                 error=error,
+            ),
+            status_code=status_code,
+        )
+
+    @router.post("/materials/upload", response_class=HTMLResponse)
+    async def upload_material(request: Request) -> HTMLResponse:
+        upload_result: MaterialUploadResult | None = None
+        upload_error: str | None = None
+        status_code = status.HTTP_200_OK
+
+        try:
+            ensure_loopback_client(request)
+            filename, pdf_bytes = await uploaded_pdf_from_request(request)
+            upload_result = prepare_uploaded_material(
+                settings=settings,
+                filename=filename,
+                pdf_bytes=pdf_bytes,
+            )
+        except UploadTooLargeError as exc:
+            upload_error = str(exc)
+            status_code = status.HTTP_413_CONTENT_TOO_LARGE
+        except PermissionError:
+            upload_error = "PDF upload is available only from this local machine."
+            status_code = status.HTTP_403_FORBIDDEN
+        except (UploadError, PdfExtractionError) as exc:
+            upload_error = upload_error_message(exc)
+            status_code = status.HTTP_400_BAD_REQUEST
+        except (KnowledgeUnitGenerationError, IndexingError):
+            upload_error = (
+                "The PDF was accepted, but Recall could not finish preparing "
+                "it for search."
+            )
+            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        except Exception:
+            upload_error = "Recall could not prepare that PDF for search."
+            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context=page_context(
+                settings,
+                request=request,
+                upload_result=upload_result,
+                upload_error=upload_error,
             ),
             status_code=status_code,
         )
@@ -161,6 +241,8 @@ def page_context(
     question: str = "",
     result: LearnerAnswer | None = None,
     error: str | None = None,
+    upload_result: MaterialUploadResult | None = None,
+    upload_error: str | None = None,
 ) -> dict[str, object]:
     return {
         "request": request,
@@ -169,6 +251,9 @@ def page_context(
         "question": question,
         "result": result,
         "error": error,
+        "upload_result": upload_result,
+        "upload_error": upload_error,
+        "max_upload_mb": MAX_UPLOAD_BYTES // (1024 * 1024),
         "confusion_clusters": safe_recurring_confusions(settings),
     }
 
@@ -184,3 +269,118 @@ async def question_from_form(request: Request) -> str:
     body = (await request.body()).decode("utf-8")
     values = parse_qs(body, keep_blank_values=True)
     return values.get("question", [""])[0]
+
+
+def ensure_loopback_client(request: Request) -> None:
+    host = request.client.host if request.client else ""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as exc:
+        raise PermissionError("Upload client is not a loopback address.") from exc
+    if not address.is_loopback:
+        raise PermissionError("Upload client is not a loopback address.")
+
+
+async def uploaded_pdf_from_request(request: Request) -> tuple[str, bytes]:
+    content_type = request.headers.get("content-type", "")
+    if "multipart/form-data" not in content_type.lower():
+        raise UploadError("Choose a PDF file before uploading.")
+
+    body = await limited_request_body(request)
+    filename, pdf_bytes = parse_uploaded_pdf(content_type, body)
+    if not pdf_bytes:
+        raise UploadError("Choose a PDF file before uploading.")
+    if len(pdf_bytes) > MAX_UPLOAD_BYTES:
+        raise UploadTooLargeError("PDF uploads are limited to 10 MB.")
+    return filename, pdf_bytes
+
+
+async def limited_request_body(request: Request) -> bytes:
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > MAX_MULTIPART_BODY_BYTES:
+            raise UploadTooLargeError("PDF uploads are limited to 10 MB.")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def parse_uploaded_pdf(content_type: str, body: bytes) -> tuple[str, bytes]:
+    header = (
+        f"Content-Type: {content_type}\r\n"
+        "MIME-Version: 1.0\r\n"
+        "\r\n"
+    ).encode("utf-8")
+    message = BytesParser(policy=default).parsebytes(header + body)
+    if not message.is_multipart():
+        raise UploadError("Choose a PDF file before uploading.")
+
+    for part in message.iter_parts():
+        disposition = part.get_content_disposition()
+        name = part.get_param("name", header="content-disposition")
+        if disposition != "form-data" or name != "material_pdf":
+            continue
+        filename = part.get_filename() or "uploaded.pdf"
+        payload = part.get_payload(decode=True) or b""
+        return filename, payload
+
+    raise UploadError("Choose a PDF file before uploading.")
+
+
+def prepare_uploaded_material(
+    *,
+    settings: Settings,
+    filename: str,
+    pdf_bytes: bytes,
+) -> MaterialUploadResult:
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix="recall-upload-",
+            suffix=".pdf",
+            dir=settings.upload_dir,
+            delete=False,
+        ) as temp_file:
+            temp_file.write(pdf_bytes)
+            temp_path = Path(temp_file.name)
+
+        db.initialize_database(settings.database_path)
+        saved_pdf = temp_path.read_bytes()
+        ingestion = ingest_pdf(
+            database_path=settings.database_path,
+            pdf_bytes=saved_pdf,
+            original_filename=filename,
+        )
+        knowledge_units = generate_knowledge_units_for_material(
+            settings.database_path,
+            ingestion.material.id,
+        )
+        index = index_material_embeddings(
+            settings.database_path,
+            ingestion.material.id,
+            build_embedding_provider(settings),
+        )
+        return MaterialUploadResult(
+            ingestion=ingestion,
+            knowledge_units=knowledge_units,
+            index=index,
+        )
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def upload_error_message(exc: Exception) -> str:
+    message = str(exc)
+    if "no meaningful extractable text" in message:
+        return "The uploaded PDF has no extractable text."
+    if "Encrypted PDFs are not supported" in message:
+        return "Encrypted PDFs are not supported."
+    if "Only PDF files" in message:
+        return "Upload a valid text-extractable PDF file."
+    if not message:
+        return "Recall could not prepare that PDF for search."
+    return message

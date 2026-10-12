@@ -15,6 +15,7 @@ from recall.generation.service import (
     EvidenceSupportAssessment,
     REFUSAL_MESSAGE,
     SupportStatus,
+    asks_for_attributed_definition,
     generate_grounded_response,
 )
 from recall.retrieval.search import RetrievalResult
@@ -218,6 +219,170 @@ def test_not_found_when_evidence_is_insufficient(tmp_path):
     assert response.status == SupportStatus.NOT_FOUND
     assert response.answer == REFUSAL_MESSAGE
     assert response.citations == []
+
+
+def test_attributed_definition_question_rejects_topical_non_answering_evidence(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material, units = material_with_units(
+        database_path,
+        [
+            (
+                "Conflict mapping asks participants about attitudes, triggering "
+                "events, scarce resources, and how a conflict changes over time."
+            )
+        ],
+    )
+    provider = FakeGenerationProvider(
+        response=GeneratedAnswer(
+            answer_text="This topical material should not be treated as a full answer.",
+            cited_knowledge_unit_ids=[units[0].id],
+        )
+    )
+
+    response = generate_grounded_response(
+        database_path=database_path,
+        question="What is peace and conflict according to various persons?",
+        retrieved=[retrieval_result(units[0], material, score=0.86)],
+        provider=provider,
+    )
+
+    assert response.status == SupportStatus.NOT_FOUND
+    assert response.answer == REFUSAL_MESSAGE
+    assert provider.calls == 0
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Define conflict according to various authors.",
+        "What is peace according to different scholars?",
+        "Define conflict citing three authors.",
+        "What is conflict according to various persons?",
+    ],
+)
+def test_author_attribution_definition_questions_activate_special_guard(question):
+    assert asks_for_attributed_definition(question) is True
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "According to the session, what is positive peace?",
+        "What is the ABC triangle according to the session?",
+        "According to the course material, what is peace?",
+        "What is Northstar Bakery's mission?",
+    ],
+)
+def test_ordinary_course_material_questions_do_not_activate_attribution_guard(question):
+    assert asks_for_attributed_definition(question) is False
+
+
+def test_attributed_definition_question_can_be_supported_by_attributed_definitions(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material, units = material_with_units(
+        database_path,
+        [
+            (
+                "Coser (1956) defines conflict as a struggle over values and "
+                "scarce resources. Galtung (1969) describes peace as more than "
+                "the absence of direct violence."
+            )
+        ],
+    )
+    provider = FakeGenerationProvider(
+        response=GeneratedAnswer(
+            answer_text="The material gives attributed definitions of conflict and peace.",
+            cited_knowledge_unit_ids=[units[0].id],
+        )
+    )
+
+    response = generate_grounded_response(
+        database_path=database_path,
+        question="What is peace and conflict according to various persons?",
+        retrieved=[retrieval_result(units[0], material, score=0.86)],
+        provider=provider,
+    )
+
+    assert response.status == SupportStatus.SUPPORTED
+    assert response.citations[0].knowledge_unit_id == units[0].id
+
+
+def test_ordinary_according_to_session_question_preserves_supported_behavior(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material, units = material_with_units(
+        database_path,
+        ["Positive peace is a condition where justice and cooperation are present."],
+    )
+    provider = FakeGenerationProvider(
+        response=GeneratedAnswer(
+            answer_text="Positive peace includes justice and cooperation.",
+            cited_knowledge_unit_ids=[units[0].id],
+        )
+    )
+
+    response = generate_grounded_response(
+        database_path=database_path,
+        question="According to the session, what is positive peace?",
+        retrieved=[retrieval_result(units[0], material, score=0.86)],
+        provider=provider,
+    )
+
+    assert response.status == SupportStatus.SUPPORTED
+    assert response.citations[0].knowledge_unit_id == units[0].id
+
+
+def test_ordinary_factual_question_still_supports_adequate_evidence(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material, units = material_with_units(
+        database_path,
+        ["The ABC triangle analyses attitudes, behaviour, and contradiction."],
+    )
+    provider = FakeGenerationProvider(
+        response=GeneratedAnswer(
+            answer_text="The ABC triangle analyses attitudes, behaviour, and contradiction.",
+            cited_knowledge_unit_ids=[units[0].id],
+        )
+    )
+
+    response = generate_grounded_response(
+        database_path=database_path,
+        question="What does the ABC triangle analyse?",
+        retrieved=[retrieval_result(units[0], material, score=0.86)],
+        provider=provider,
+    )
+
+    assert response.status == SupportStatus.SUPPORTED
+
+
+def test_attributed_definition_question_with_unattributed_definition_is_partial(tmp_path):
+    database_path = tmp_path / "recall.sqlite3"
+    material, units = material_with_units(
+        database_path,
+        [
+            (
+                "Conflict is a disagreement between interdependent parties. "
+                "Peace is a condition where violence is absent and cooperation "
+                "is possible."
+            )
+        ],
+    )
+    provider = FakeGenerationProvider(
+        response=GeneratedAnswer(
+            answer_text="The material defines peace and conflict but does not attribute the definitions.",
+            cited_knowledge_unit_ids=[units[0].id],
+        )
+    )
+
+    response = generate_grounded_response(
+        database_path=database_path,
+        question="What is peace and conflict according to various persons?",
+        retrieved=[retrieval_result(units[0], material, score=0.86)],
+        provider=provider,
+    )
+
+    assert response.status == SupportStatus.PARTIAL
+    assert response.answer.startswith("The available material only partially supports")
+    assert response.citations[0].knowledge_unit_id == units[0].id
 
 
 def test_no_generation_call_when_not_found_gate_applies(tmp_path):

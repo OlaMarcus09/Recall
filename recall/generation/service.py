@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -66,6 +67,12 @@ def generate_grounded_response(
     if not selected:
         return not_found_response()
 
+    inferred_assessment = assess_selected_evidence_support(question, selected)
+    if inferred_assessment is None:
+        return not_found_response()
+    if inferred_assessment == EvidenceSupportAssessment.KNOWN_PARTIAL:
+        support_assessment = EvidenceSupportAssessment.KNOWN_PARTIAL
+
     evidence_items = [
         EvidenceItem(
             knowledge_unit_id=result.knowledge_unit_id,
@@ -120,6 +127,143 @@ def select_evidence(retrieved: list[RetrievalResult]) -> list[RetrievalResult]:
         for result in ordered[:MAX_GENERATION_EVIDENCE]
         if result.similarity >= close_score
     ]
+
+
+def assess_selected_evidence_support(
+    question: str,
+    selected: list[RetrievalResult],
+) -> EvidenceSupportAssessment | None:
+    if not asks_for_attributed_definition(question):
+        return EvidenceSupportAssessment.NO_KNOWN_GAPS
+
+    evidence_text = "\n".join(result.text for result in selected)
+    requested_terms = requested_definition_terms(question)
+    if requested_terms:
+        definition_matches = [
+            term
+            for term in requested_terms
+            if contains_definition_for_term(evidence_text, term)
+        ]
+        has_definition_substance = bool(definition_matches)
+        has_requested_definition_coverage = len(definition_matches) == len(
+            requested_terms
+        )
+    else:
+        has_definition_substance = contains_general_definition_substance(
+            evidence_text
+        )
+        has_requested_definition_coverage = has_definition_substance
+
+    if not has_definition_substance:
+        return None
+
+    if not has_requested_definition_coverage or not contains_attribution_cue(
+        evidence_text
+    ):
+        return EvidenceSupportAssessment.KNOWN_PARTIAL
+
+    return EvidenceSupportAssessment.NO_KNOWN_GAPS
+
+
+def asks_for_attributed_definition(question: str) -> bool:
+    normalized = " ".join(question.lower().split())
+    has_definition_intent = bool(
+        re.search(
+            r"\b(define|definition|meaning|what\s+(?:is|are)|concept\s+of)\b",
+            normalized,
+        )
+    )
+    has_attribution_intent = bool(
+        re.search(
+            r"\b(various persons|various authors|various scholars|"
+            r"different persons|different authors|different scholars|"
+            r"citing\s+(?:[a-z]+\s+)?authors|cite authors|"
+            r"by authors|by scholars)\b",
+            normalized,
+        )
+    )
+    return has_definition_intent and has_attribution_intent
+
+
+def requested_definition_terms(question: str) -> list[str]:
+    normalized = " ".join(question.lower().split())
+    candidates: list[str] = []
+    for pattern in (
+        r"\bwhat\s+(?:is|are)\s+(.+?)\s+according\s+to\b",
+        r"\bdefine\s+(.+?)(?:\s+according\s+to|\s+citing\b|$)",
+        r"\bdefinition\s+of\s+(.+?)(?:\s+according\s+to|\s+citing\b|$)",
+    ):
+        match = re.search(pattern, normalized)
+        if match:
+            candidates = split_requested_terms(match.group(1))
+            break
+    return candidates
+
+
+def split_requested_terms(text: str) -> list[str]:
+    noise = {
+        "a",
+        "an",
+        "and",
+        "in",
+        "of",
+        "or",
+        "pdf",
+        "the",
+        "various",
+        "persons",
+        "people",
+        "authors",
+        "scholars",
+    }
+    terms: list[str] = []
+    for raw_term in re.split(r"\s+(?:and|or)\s+|[,;/]", text):
+        words = [
+            word
+            for word in re.findall(r"[a-z][a-z0-9-]*", raw_term)
+            if word not in noise
+        ]
+        term = " ".join(words).strip()
+        if term and term not in terms:
+            terms.append(term)
+    return terms
+
+
+def contains_definition_for_term(text: str, term: str) -> bool:
+    escaped = re.escape(term)
+    patterns = [
+        rf"\b{escaped}\b\s+(?:is|are|means|refers\s+to|exists\s+whenever|"
+        rf"can\s+be\s+understood\s+as|is\s+defined\s+as|are\s+defined\s+as)\b",
+        rf"\b(?:defines?|defined)\b"
+        rf"[^.?!;]{{0,100}}\b{escaped}\b",
+        rf"\b(?:describes?|described)\b[^.?!;]{{0,80}}\b{escaped}\b"
+        rf"[^.?!;]{{0,40}}\bas\b",
+        rf"\b{escaped}\b[^.?!;]{{0,80}}\b(?:described|describes?)\s+as\b",
+        rf"\b{escaped}\b[^.?!;]{{0,100}}\b(?:defined\s+as|means|refers\s+to)\b",
+    ]
+    return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
+
+
+def contains_general_definition_substance(text: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(is\s+defined\s+as|are\s+defined\s+as|refers\s+to|means|"
+            r"exists\s+whenever|defines?)\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def contains_attribution_cue(text: str) -> bool:
+    return bool(
+        re.search(
+            r"\b[A-Z][A-Za-z]+(?:\s*(?:,|&|and)\s*[A-Z][A-Za-z]+)*"
+            r"\s*(?:\(\d{4}\)|,\s*\d{4})",
+            text,
+        )
+        or re.search(r"\baccording\s+to\s+[A-Z][A-Za-z]+", text)
+    )
 
 
 def validate_citations(

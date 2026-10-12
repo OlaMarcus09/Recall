@@ -10,9 +10,9 @@
         --navy: #071a44;
         --text: #17233f;
         --muted: #526079;
-        --page: #fbfaf5;
-        --card: #fffefb;
-        --line: #e4dfd4;
+        --page: #f7f5ee;
+        --card: #fffdf8;
+        --line: #e1ddd2;
         --green: #0f8b62;
         --green-strong: #087653;
         --green-soft: #e5f8ed;
@@ -22,8 +22,9 @@
         --purple-soft: #f3edff;
         --amber-soft: #fff3cf;
         --gray-soft: #f0f1f3;
-        --shadow: 0 18px 45px rgba(31, 39, 35, 0.08);
-        --radius: 18px;
+        --shadow: 0 10px 28px rgba(31, 39, 35, 0.06);
+        --shadow-soft: 0 4px 14px rgba(31, 39, 35, 0.04);
+        --radius: 16px;
         font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         line-height: 1.5;
         color: var(--text);
@@ -37,22 +38,21 @@
       body {
         margin: 0;
         min-width: 320px;
-        background:
-          radial-gradient(circle at 85% 8%, rgba(15, 139, 98, 0.12), transparent 220px),
-          linear-gradient(180deg, #fffdf8 0, var(--page) 420px);
+        background: linear-gradient(180deg, #fffdf8 0, var(--page) 360px);
         color: var(--text);
       }
 
       button,
+      input,
       textarea {
         outline-color: var(--green);
         outline-offset: 3px;
       }
 
       .shell {
-        width: min(100% - 32px, 1120px);
+        width: min(100% - 28px, 1160px);
         margin: 0 auto;
-        padding: 22px 0 42px;
+        padding: 18px 0 36px;
       }
 
       .topbar {
@@ -60,7 +60,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        margin-bottom: 28px;
+        margin-bottom: 14px;
       }
 
       .brand-lockup {
@@ -88,7 +88,7 @@
       .brand {
         margin: 0;
         color: var(--navy);
-        font-size: 1.55rem;
+        font-size: 1.42rem;
         line-height: 1;
         letter-spacing: 0;
       }
@@ -114,16 +114,22 @@
 
       .hero {
         display: grid;
-        gap: 12px;
-        margin-bottom: 22px;
+        gap: 10px;
+        margin-bottom: 16px;
+        padding: 12px 0 2px;
+      }
+
+      .hero-copy-block {
+        display: grid;
+        gap: 8px;
       }
 
       .hero h2 {
         margin: 0;
-        max-width: 12ch;
+        max-width: 30ch;
         color: var(--navy);
-        font-size: clamp(2rem, 10vw, 3.6rem);
-        line-height: 1.08;
+        font-size: clamp(1.55rem, 7vw, 2.4rem);
+        line-height: 1.12;
         letter-spacing: 0;
       }
 
@@ -131,28 +137,28 @@
         margin: 0;
         max-width: 60ch;
         color: var(--muted);
-        font-size: 1.02rem;
+        font-size: 1rem;
       }
 
       .layout {
         display: grid;
-        gap: 18px;
+        gap: 16px;
       }
 
       .stack {
         display: grid;
-        gap: 18px;
+        gap: 16px;
       }
 
       .card {
         border: 1px solid var(--line);
         border-radius: var(--radius);
-        background: rgba(255, 254, 251, 0.94);
-        box-shadow: var(--shadow);
+        background: rgba(255, 253, 248, 0.96);
+        box-shadow: var(--shadow-soft);
       }
 
       .card-body {
-        padding: 18px;
+        padding: 16px;
       }
 
       .section-kicker {
@@ -163,9 +169,9 @@
       }
 
       .icon-tile {
-        width: 48px;
-        height: 48px;
-        border-radius: 14px;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
       }
 
       .icon-green {
@@ -186,7 +192,7 @@
       .section-heading {
         margin: 0;
         color: var(--navy);
-        font-size: 1.18rem;
+        font-size: 1.08rem;
         line-height: 1.2;
       }
 
@@ -197,8 +203,11 @@
 
       form {
         display: grid;
+        margin-top: 14px;
+      }
+
+      .upload-form {
         gap: 12px;
-        margin-top: 16px;
       }
 
       label {
@@ -206,17 +215,37 @@
         font-weight: 800;
       }
 
-      textarea {
-        min-height: 112px;
+      .composer-box {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid #cfd6df;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: inset 0 1px 2px rgba(7, 26, 68, 0.035);
+      }
+
+      .file-input {
         width: 100%;
-        resize: vertical;
-        padding: 14px;
-        border: 1px solid #c8cfda;
+        min-height: 44px;
+        padding: 10px 12px;
+        border: 1px solid #cfd6df;
         border-radius: 12px;
         background: #fff;
         color: inherit;
         font: inherit;
-        box-shadow: inset 0 1px 2px rgba(7, 26, 68, 0.04);
+      }
+
+      textarea {
+        min-height: 92px;
+        width: 100%;
+        resize: vertical;
+        padding: 4px 2px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
       }
 
       textarea::placeholder {
@@ -226,6 +255,8 @@
       .form-footer {
         display: grid;
         gap: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #edf0f2;
       }
 
       .hint {
@@ -237,7 +268,7 @@
 
       button {
         display: inline-flex;
-        min-height: 46px;
+        min-height: 44px;
         align-items: center;
         justify-content: center;
         gap: 9px;
@@ -250,7 +281,7 @@
         font: inherit;
         font-weight: 850;
         cursor: pointer;
-        box-shadow: 0 12px 26px rgba(15, 139, 98, 0.22);
+        box-shadow: 0 8px 18px rgba(15, 139, 98, 0.16);
       }
 
       button:hover {
@@ -266,39 +297,96 @@
         color: #713030;
       }
 
+      .upload-status {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid #bee6cd;
+        background: #f3fbf6;
+        color: #174734;
+      }
+
+      .upload-status.duplicate {
+        border-color: #cfe0f9;
+        background: #f3f8ff;
+        color: #1d4a94;
+      }
+
+      .upload-status p {
+        margin: 3px 0 0;
+        color: inherit;
+      }
+
+      .upload-title {
+        margin: 0;
+        color: var(--navy);
+        font-weight: 850;
+      }
+
       .result {
         display: grid;
-        gap: 14px;
+        gap: 12px;
+      }
+
+      .card.result {
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .card.result > .card-body {
+        padding: 0;
+      }
+
+      .question-summary {
+        display: grid;
+        gap: 5px;
+        margin-bottom: 12px;
+        padding: 4px 2px 10px;
+        border-bottom: 1px solid #e9e4d9;
+        border-radius: 14px;
+      }
+
+      .question-summary span {
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      .question-summary p {
+        margin: 0;
+        color: var(--navy);
+        font-weight: 750;
       }
 
       .trust-banner {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
-        gap: 12px;
+        display: flex;
+        gap: 10px;
         align-items: center;
-        padding: 14px;
-        border-radius: 16px;
-        border: 1px solid transparent;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid #e6eadf;
       }
 
       .trust-banner.SUPPORTED {
         border-color: #bee6cd;
-        background: linear-gradient(135deg, #e8faee, #f8fffb);
+        background: #f3fbf6;
       }
 
       .trust-banner.PARTIAL {
         border-color: #ecd79d;
-        background: linear-gradient(135deg, var(--amber-soft), #fffdf6);
+        background: #fff9e8;
       }
 
       .trust-banner.NOT_FOUND {
         border-color: #d7dbe2;
-        background: linear-gradient(135deg, var(--gray-soft), #fff);
+        background: #f7f8fa;
       }
 
       .trust-icon {
-        width: 38px;
-        height: 38px;
+        width: 30px;
+        height: 30px;
         border-radius: 999px;
         color: #fff;
         background: var(--green);
@@ -315,25 +403,25 @@
       .trust-label {
         margin: 0;
         color: var(--navy);
-        font-weight: 900;
+        font-weight: 850;
       }
 
       .trust-copy {
         margin: 2px 0 0;
         color: var(--muted);
-        font-size: 0.94rem;
+        font-size: 0.9rem;
       }
 
       .answer-card {
-        padding: 16px;
-        border: 1px solid var(--line);
-        border-radius: 16px;
+        padding: 14px;
+        border: 0;
+        border-radius: 14px;
         background: #fff;
       }
 
       .answer-card h3,
       .sources h3 {
-        margin: 0 0 10px;
+        margin: 0 0 8px;
         color: var(--navy);
         font-size: 1.04rem;
       }
@@ -350,8 +438,7 @@
       }
 
       .sources-intro {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
+        display: flex;
         gap: 10px;
         align-items: center;
       }
@@ -364,29 +451,21 @@
 
       .citations {
         display: grid;
-        gap: 12px;
+        gap: 10px;
       }
 
       .citation {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
-        gap: 12px;
-        padding: 14px;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+        padding: 13px;
         border: 1px solid #cfe0f9;
-        border-radius: 16px;
-        background: linear-gradient(135deg, #ffffff, var(--blue-soft));
+        border-radius: 14px;
+        background: #f9fcff;
       }
 
       .document-glyph {
-        display: grid;
-        gap: 5px;
-        width: 52px;
-        height: 64px;
-        padding: 10px 9px;
-        border: 1px solid #dae6fb;
-        border-radius: 10px;
-        background: #fff;
-        box-shadow: 0 8px 18px rgba(47, 114, 242, 0.12);
+        display: none;
       }
 
       .document-glyph span {
@@ -404,14 +483,14 @@
       }
 
       .citation-title {
-        margin: 0 0 7px;
+        margin: 0 0 6px;
         color: var(--navy);
-        font-weight: 900;
+        font-weight: 850;
       }
 
       .page-pill {
         display: inline-flex;
-        margin-bottom: 9px;
+        margin-bottom: 8px;
         padding: 4px 9px;
         border-radius: 8px;
         background: #dbeafe;
@@ -425,39 +504,40 @@
         padding: 10px 11px;
         border: 0;
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.72);
+        background: #fff;
         color: #354158;
         font-size: 0.94rem;
       }
 
       .insights {
-        border-color: #e1d7fb;
+        border-color: #e8defd;
+        box-shadow: var(--shadow-soft);
       }
 
       .confusion-list {
         display: grid;
-        gap: 12px;
-        margin-top: 16px;
+        gap: 10px;
+        margin-top: 14px;
       }
 
       .confusion-item {
-        padding: 14px;
+        padding: 13px;
         border: 1px solid #e1d7fb;
-        border-radius: 16px;
-        background: linear-gradient(135deg, #fff, var(--purple-soft));
+        border-radius: 14px;
+        background: #fcfaff;
       }
 
       .confusion-question {
         margin: 0 0 10px;
         color: var(--navy);
-        font-weight: 900;
+        font-weight: 820;
       }
 
       .confusion-meta {
         display: inline-flex;
         margin: 0;
         padding: 5px 9px;
-        border-radius: 8px;
+        border-radius: 999px;
         background: #eadfff;
         color: #5b2ee0;
         font-size: 0.88rem;
@@ -471,7 +551,7 @@
         margin-top: 16px;
         padding: 14px;
         border: 1px solid #e7ddc2;
-        border-radius: 16px;
+        border-radius: 14px;
         color: var(--muted);
         background: #fffdf7;
       }
@@ -500,12 +580,12 @@
 
       @media (min-width: 760px) {
         .shell {
-          width: min(100% - 48px, 1120px);
-          padding-top: 32px;
+          width: min(100% - 48px, 1160px);
+          padding-top: 24px;
         }
 
         .topbar {
-          margin-bottom: 48px;
+          margin-bottom: 20px;
         }
 
         .capability-strip {
@@ -515,11 +595,18 @@
         }
 
         .hero {
-          margin-bottom: 32px;
+          grid-template-columns: auto minmax(0, 1fr);
+          align-items: start;
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+
+        .hero-copy-block {
+          max-width: 760px;
         }
 
         .layout {
-          grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.72fr);
+          grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.68fr);
           align-items: start;
         }
 
@@ -527,13 +614,39 @@
           padding: 24px;
         }
 
+        .citation {
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 12px;
+        }
+
+        .document-glyph {
+          display: grid;
+          gap: 5px;
+          width: 44px;
+          height: 54px;
+          padding: 9px 8px;
+          border: 1px solid #dae6fb;
+          border-radius: 10px;
+          background: #fff;
+          box-shadow: 0 8px 18px rgba(47, 114, 242, 0.1);
+        }
+
         .form-footer {
           grid-template-columns: minmax(0, 1fr) auto;
           align-items: center;
         }
 
+        .form-footer button {
+          grid-column: 2;
+          grid-row: 1;
+          width: auto;
+          min-width: 150px;
+        }
+
         .hint {
-          justify-self: end;
+          grid-column: 1;
+          grid-row: 1;
+          justify-self: start;
         }
 
         .insights {
@@ -567,11 +680,13 @@
 
         <section class="hero" aria-labelledby="product-heading">
           <div class="product-label">Learning Memory</div>
-          <h2 id="product-heading">Learning that stays with your community.</h2>
-          <p>
-            Ask questions from your course material, get grounded answers with
-            sources, and see what keeps coming up.
-          </p>
+          <div class="hero-copy-block">
+            <h2 id="product-heading">Learning that stays with your community.</h2>
+            <p>
+              Ask questions from your course material, get grounded answers with
+              sources, and see what keeps coming up.
+            </p>
+          </div>
         </section>
       </header>
 
@@ -593,22 +708,24 @@
               </div>
 
               <form method="post" action="/ask">
-                <label for="question">Question</label>
-                <textarea
-                  id="question"
-                  name="question"
-                  maxlength="500"
-                  placeholder="Ask a question about your course material..."
-                  required
-                >{{ question }}</textarea>
-                <div class="form-footer">
-                  <button type="submit">
-                    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path d="M20 4 9.5 14.5M20 4l-5.8 16-4.7-5.5L4 10l16-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                    </svg>
-                    Ask Recall
-                  </button>
-                  <p class="hint">Up to 500 characters</p>
+                <div class="composer-box">
+                  <label for="question">Question</label>
+                  <textarea
+                    id="question"
+                    name="question"
+                    maxlength="500"
+                    placeholder="Ask a question about your course material..."
+                    required
+                  >{{ question }}</textarea>
+                  <div class="form-footer">
+                    <button type="submit">
+                      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M20 4 9.5 14.5M20 4l-5.8 16-4.7-5.5L4 10l16-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                      </svg>
+                      Ask Recall
+                    </button>
+                    <p class="hint">Up to 500 characters</p>
+                  </div>
                 </div>
               </form>
 
@@ -618,9 +735,73 @@
             </div>
           </section>
 
+          <section class="card" aria-labelledby="upload-heading">
+            <div class="card-body">
+              <div class="section-kicker">
+                <span class="icon-tile icon-blue" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 3h9l3 3v15H6V3Z" fill="currentColor" opacity=".92"/>
+                    <path d="M15 3v4h4M9 13h6M12 10v6" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                <div>
+                  <h3 id="upload-heading" class="section-heading">Add material</h3>
+                  <p class="muted">
+                    Upload an authorized text-extractable PDF from this local machine.
+                  </p>
+                </div>
+              </div>
+
+              <form class="upload-form" method="post" action="/materials/upload" enctype="multipart/form-data">
+                <label for="material_pdf">PDF material</label>
+                <input
+                  class="file-input"
+                  id="material_pdf"
+                  name="material_pdf"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  required
+                >
+                <div class="form-footer">
+                  <button type="submit">
+                    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    Index PDF
+                  </button>
+                  <p class="hint">PDF only, up to {{ max_upload_mb }} MB</p>
+                </div>
+              </form>
+
+              {% if upload_result %}
+                <div class="upload-status {% if not upload_result.created %}duplicate{% endif %}" role="status">
+                  {% if upload_result.created %}
+                    <p class="upload-title">Material indexed and ready to search.</p>
+                  {% else %}
+                    <p class="upload-title">Material already existed; search index refreshed.</p>
+                  {% endif %}
+                  <p>
+                    {{ upload_result.ingestion.material.title }}
+                    · {{ upload_result.ingestion.material.page_count }} pages
+                    · {{ upload_result.index.knowledge_unit_count }} KnowledgeUnits indexed
+                  </p>
+                </div>
+              {% endif %}
+
+              {% if upload_error %}
+                <div class="error" role="alert">{{ upload_error }}</div>
+              {% endif %}
+            </div>
+          </section>
+
           {% if result %}
             <section class="card result" aria-live="polite" aria-labelledby="answer-heading">
               <div class="card-body">
+                <div class="question-summary">
+                  <span>Your question</span>
+                  <p>{{ result.question }}</p>
+                </div>
+
                 {% if result.status.value == "PARTIAL" %}
                   <div class="trust-banner {{ result.status.value }}">
                     <span class="icon-tile trust-icon" aria-hidden="true">

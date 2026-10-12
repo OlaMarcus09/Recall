@@ -2,15 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import fitz
 import pytest
 from fastapi.testclient import TestClient
 
+from recall import db
 from recall.answering import LearnerAnswer, LearnerCitation
 from recall.confusion.service import ConfusionCluster, record_question_memory
 from recall.config import Settings
 from recall.generation.service import REFUSAL_MESSAGE, SupportStatus
 from recall.main import create_app
 from recall.retrieval.embeddings import EmbeddedText
+from recall.web.routes import MAX_UPLOAD_BYTES
 
 
 @dataclass
@@ -30,13 +33,37 @@ def fake_embedding_provider(monkeypatch):
     )
 
 
-def make_client(tmp_path):
+def make_pdf(page_texts: list[str]) -> bytes:
+    document = fitz.open()
+    try:
+        for page_text in page_texts:
+            page = document.new_page()
+            page.insert_text((72, 72), page_text)
+        return document.tobytes()
+    finally:
+        document.close()
+
+
+def make_blank_pdf() -> bytes:
+    document = fitz.open()
+    try:
+        document.new_page()
+        return document.tobytes()
+    finally:
+        document.close()
+
+
+def make_client(tmp_path, client_address=("testclient", 50000)):
     settings = Settings(
         environment="test",
         database_path=tmp_path / "recall.sqlite3",
         upload_dir=tmp_path / "uploads",
     )
-    return TestClient(create_app(settings))
+    return TestClient(create_app(settings), client=client_address)
+
+
+def make_local_client(tmp_path):
+    return make_client(tmp_path, client_address=("127.0.0.1", 50000))
 
 
 def citation(**overrides):
@@ -64,8 +91,158 @@ def test_get_learner_page_renders_product_frame_and_form(tmp_path):
     assert "What would you like to understand?" in response.text
     assert 'maxlength="500"' in response.text
     assert "Ask a question about your course material..." in response.text
+    assert "Add material" in response.text
+    assert 'name="material_pdf"' in response.text
+    assert "PDF only, up to 10 MB" in response.text
     assert "Community Confusion" in response.text
     assert "Environment:" not in response.text
+
+
+def test_local_pdf_upload_ingests_chunks_and_indexes(monkeypatch, tmp_path):
+    pdf_bytes = make_pdf(
+        [
+            "Upload mission evidence for a searchable local material.",
+            "Upload strategy evidence remains page scoped.",
+        ]
+    )
+
+    with make_local_client(tmp_path) as client:
+        response = client.post(
+            "/materials/upload",
+            files={"material_pdf": ("upload-demo.pdf", pdf_bytes, "application/pdf")},
+        )
+
+    assert response.status_code == 200
+    assert "Material indexed and ready to search." in response.text
+    assert "upload-demo" in response.text
+    assert "2 pages" in response.text
+    assert db.material_count(tmp_path / "recall.sqlite3") == 1
+    assert db.knowledge_unit_count(tmp_path / "recall.sqlite3") >= 2
+    assert db.embedding_count(tmp_path / "recall.sqlite3") >= 2
+    assert not list((tmp_path / "uploads").glob("recall-upload-*"))
+
+
+def test_upload_rejects_invalid_file_content(tmp_path):
+    with make_local_client(tmp_path) as client:
+        response = client.post(
+            "/materials/upload",
+            files={"material_pdf": ("not-a-pdf.pdf", b"not a pdf", "application/pdf")},
+        )
+
+    assert response.status_code == 400
+    assert "Upload a valid text-extractable PDF file." in response.text
+    assert db.material_count(tmp_path / "recall.sqlite3") == 0
+
+
+def test_upload_rejects_oversized_pdf(tmp_path):
+    oversized = b"%PDF-1.7\n" + (b"x" * (MAX_UPLOAD_BYTES + 1))
+
+    with make_local_client(tmp_path) as client:
+        response = client.post(
+            "/materials/upload",
+            files={"material_pdf": ("large.pdf", oversized, "application/pdf")},
+        )
+
+    assert response.status_code == 413
+    assert "PDF uploads are limited to 10 MB." in response.text
+    assert not list((tmp_path / "uploads").glob("recall-upload-*"))
+
+
+def test_upload_rejects_scanned_or_image_only_pdf(tmp_path):
+    with make_local_client(tmp_path) as client:
+        response = client.post(
+            "/materials/upload",
+            files={
+                "material_pdf": ("blank.pdf", make_blank_pdf(), "application/pdf"),
+            },
+        )
+
+    assert response.status_code == 400
+    assert "The uploaded PDF has no extractable text." in response.text
+    assert db.material_count(tmp_path / "recall.sqlite3") == 0
+
+
+def test_duplicate_upload_refreshes_index_without_duplicate_material(tmp_path):
+    pdf_bytes = make_pdf(["Duplicate upload should reuse the same material."])
+
+    with make_local_client(tmp_path) as client:
+        first = client.post(
+            "/materials/upload",
+            files={"material_pdf": ("first.pdf", pdf_bytes, "application/pdf")},
+        )
+        second = client.post(
+            "/materials/upload",
+            files={"material_pdf": ("renamed.pdf", pdf_bytes, "application/pdf")},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert "Material already existed; search index refreshed." in second.text
+    assert db.material_count(tmp_path / "recall.sqlite3") == 1
+
+
+def test_upload_rejects_non_loopback_client(tmp_path):
+    pdf_bytes = make_pdf(["Remote clients should not be allowed to upload."])
+
+    with make_client(tmp_path, client_address=("203.0.113.10", 50000)) as client:
+        response = client.post(
+            "/materials/upload",
+            files={"material_pdf": ("remote.pdf", pdf_bytes, "application/pdf")},
+        )
+
+    assert response.status_code == 403
+    assert "available only from this local machine" in response.text
+    assert db.material_count(tmp_path / "recall.sqlite3") == 0
+
+
+def test_upload_indexing_failure_is_safe_and_cleans_temp(monkeypatch, tmp_path):
+    def fail_index(*args, **kwargs):
+        raise RuntimeError("simulated index failure with /private/path")
+
+    monkeypatch.setattr("recall.web.routes.index_material_embeddings", fail_index)
+    pdf_bytes = make_pdf(["Indexing failure should not leave temporary uploads."])
+
+    with make_local_client(tmp_path) as client:
+        response = client.post(
+            "/materials/upload",
+            files={"material_pdf": ("failure.pdf", pdf_bytes, "application/pdf")},
+        )
+
+    assert response.status_code == 500
+    assert "Recall could not prepare that PDF for search." in response.text
+    assert "/private/path" not in response.text
+    assert not list((tmp_path / "uploads").glob("recall-upload-*"))
+
+
+def test_successful_upload_is_searchable_immediately(tmp_path):
+    pdf_bytes = make_pdf(
+        [
+            "Northstar local upload mission: make course knowledge searchable.",
+            "A separate page describes implementation details.",
+        ]
+    )
+
+    with make_local_client(tmp_path) as client:
+        upload = client.post(
+            "/materials/upload",
+            files={
+                "material_pdf": (
+                    "answer-ready.pdf",
+                    pdf_bytes,
+                    "application/pdf",
+                )
+            },
+        )
+        answer = client.post(
+            "/ask",
+            data={"question": "What is the Northstar local upload mission?"},
+        )
+
+    assert upload.status_code == 200
+    assert answer.status_code == 200
+    assert "Supported by your material" in answer.text
+    assert "Northstar local upload mission" in answer.text
+    assert "answer-ready" in answer.text
 
 
 def test_supported_response_renders_answer_and_db_citation(monkeypatch, tmp_path):

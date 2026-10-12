@@ -139,6 +139,14 @@ Scanned/image-only PDFs, malformed PDFs, encrypted PDFs, empty files, and
 non-PDF inputs are rejected. Failed ingestion is atomic and should not
 leave partial material or page records behind.
 
+The learner page also includes a local-only browser upload form for an
+operator adding authorized material from the machine running Recall. It
+accepts text-extractable PDFs up to 10 MB, uses temporary files under
+`RECALL_UPLOAD_DIR`, and then reuses the same ingestion, KnowledgeUnit and
+embedding-indexing services. This is not authenticated department-wide
+document management and must not be exposed publicly without proper
+authentication and authorization.
+
 ## Knowledge Units
 
 T03 converts each extracted page into deterministic `KnowledgeUnit`
@@ -330,7 +338,8 @@ Recall reads configuration from environment variables:
 
 - `RECALL_ENV`: runtime environment label, default `development`
 - `RECALL_DATABASE_PATH`: SQLite database path, default `data/recall.sqlite3`
-- `RECALL_UPLOAD_DIR`: future upload storage path, default `uploads`
+- `RECALL_UPLOAD_DIR`: temporary-file directory for local browser PDF uploads,
+  default `uploads`
 - `RECALL_EMBEDDING_PROVIDER`: embedding provider name, default `fastembed`
 - `RECALL_EMBEDDING_MODEL`: embedding model, default `BAAI/bge-small-en-v1.5`
 - `RECALL_FASTEMBED_CACHE_DIR`: optional FastEmbed model cache path
